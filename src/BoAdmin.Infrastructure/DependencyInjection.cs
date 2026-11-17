@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using BoAdmin.Application.Abstractions;
 using BoAdmin.Infrastructure.Bo;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -39,7 +40,11 @@ public static class DependencyInjection
 
         services.AddHostedService<BoLogoffHostedService>();
 
-        // Parça 4: IBoReportGateway
+        // ---------------- Rapor işlemleri ----------------
+        // Klasör verisi IMemoryCache'te tutulur; servisler scoped (typed HttpClient'ı uzun süre tutmamak için)
+        services.AddScoped<FolderPathCache>();
+        services.AddScoped<IBoReportGateway, BoReportGateway>();
+
         // Parça 5: Audit log (EF Core)
 
         return services;
