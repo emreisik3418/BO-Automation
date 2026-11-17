@@ -46,7 +46,7 @@ Bağımlılık yönü: `Web → Application ← Infrastructure` (Web, compositio
 ## Kod parçaları (ilerleme)
 
 - [x] Parça 1: Proje dosyaları, `Program.cs`, `appsettings*.json`
-- [ ] Parça 2: Yetkilendirme (handler, policy, menü erişimi)
+- [x] Parça 2: Yetkilendirme (handler, policy, menü erişimi)
 - [ ] Parça 3: BO oturum servisi + REST client
 - [ ] Parça 4: Rapor gateway + rapor servisi
 - [ ] Parça 5: Audit log
