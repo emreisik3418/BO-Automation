@@ -4,6 +4,9 @@
     ViewData["Title"] = "Toplu Silme Önizleme";
     var p = Model.Preview;
     var toProcess = Model.ToProcess;
+    var skipped = Model.Skipped;
+    var folderPath = p.TargetFolder.Path.TrimEnd('/');
+    var instanceTotal = toProcess.Sum(i => i.InstanceCount);
 }
 
 <partial name="_ReportsNav" model="@("Bulk")" />
@@ -28,7 +31,7 @@
     </div>
     <div class="col-md-3">
         <div class="card card-body py-2 shadow-sm">
-            <div class="small text-muted">Yedek klasörü</div>
+            <div class="small text-muted">Yedekleme klasörü</div>
             <div>@p.TargetFolder.Path <span class="small text-muted">(ID: @p.TargetFolder.Id)</span></div>
         </div>
     </div>
@@ -40,7 +43,7 @@
     </div>
     <div class="col-md-2">
         <div class="card card-body py-2 shadow-sm">
-            <div class="small text-muted">İşlenecek</div>
+            <div class="small text-muted">Yedeklenip silinecek</div>
             <div class="fs-5 fw-semibold">@toProcess.Count</div>
         </div>
     </div>
@@ -80,9 +83,17 @@
     <div class="alert alert-light border small">Dosyada tekrar eden @p.DuplicateCount CUID bir kez sayıldı.</div>
 }
 
-@if (p.AlreadyInTargetCount > 0)
+@if (skipped.Count > 0)
 {
-    <div class="alert alert-light border small">@p.AlreadyInTargetCount rapor zaten yedek klasöründe; işleme alınmayacak.</div>
+    <div class="alert alert-warning small">
+        <strong>@skipped.Count rapor</strong> işleme alınmayacak:
+        <ul class="mb-0 mt-1">
+            @foreach (var item in skipped)
+            {
+                <li>@item.Report.Name <span class="text-muted">(@item.Report.FolderPath)</span>: @item.Reason</li>
+            }
+        </ul>
+    </div>
 }
 
 @if (toProcess.Count == 0)
@@ -95,19 +106,23 @@ else
     @* ---------------- Rapor listesi ---------------- *@
     <div class="card shadow-sm mb-3">
         <div class="card-header">
-            Yedek klasörüne taşınacak raporlar: <strong>@toProcess.Count</strong>
-            <span class="text-muted small ms-2">Toplam instance: @(toProcess.Sum(i => i.InstanceCount)) (raporla birlikte taşınır)</span>
+            Yedeklenip silinecek raporlar: <strong>@toProcess.Count</strong>
+            @if (instanceTotal > 0)
+            {
+                <span class="text-warning-emphasis small ms-2">
+                    Toplam @instanceTotal instance kopyalanmaz; orijinalle birlikte silinir.
+                </span>
+            }
         </div>
         <div class="table-responsive preview-table">
             <table class="table table-sm mb-0 align-middle">
                 <thead class="table-light">
                     <tr>
                         <th>Rapor adı</th>
-                        <th>Tip</th>
                         <th>Bulunduğu klasör</th>
+                        <th>Yedek adı (@folderPath/...)</th>
                         <th>Sahip</th>
                         <th class="text-end">Instance</th>
-                        <th>CUID</th>
                         <th>ID</th>
                     </tr>
                 </thead>
@@ -116,12 +131,14 @@ else
                     {
                         var r = item.Report;
                         <tr>
-                            <td>@r.Name</td>
-                            <td><span class="badge text-bg-light border">@r.KindDisplayName</span></td>
+                            <td>
+                                @r.Name
+                                <div class="small text-muted font-monospace">@r.Cuid</div>
+                            </td>
                             <td class="small text-muted">@r.FolderPath</td>
+                            <td class="small">@item.BackupName</td>
                             <td>@r.Owner</td>
                             <td class="text-end">@item.InstanceCount</td>
-                            <td class="small text-muted font-monospace">@r.Cuid</td>
                             <td class="small text-muted">@r.Id</td>
                         </tr>
                     }
@@ -148,8 +165,9 @@ else
         </div>
 
         <div class="alert @(CurrentEnvironment.IsCritical ? "alert-danger fw-semibold" : "alert-warning") small">
-            @toProcess.Count rapor <strong>@CurrentEnvironment.DisplayName</strong> ortamında bulundukları klasörlerden
-            <strong>@p.TargetFolder.Path</strong> klasörüne taşınacak.
+            <strong>@CurrentEnvironment.DisplayName</strong> ortamında @toProcess.Count rapor
+            <strong>@p.TargetFolder.Path</strong> klasörüne <code>adı_CUID</code> adıyla kopyalanacak,
+            ardından <strong>orijinalleri silinecek</strong>. Kopyası oluşmayan raporun orijinali silinmez.
         </div>
 
         <div class="d-flex gap-2">

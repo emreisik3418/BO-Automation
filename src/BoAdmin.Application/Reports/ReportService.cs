@@ -24,7 +24,10 @@ public interface IReportService
     /// <summary>TXT içeriğindeki CUID'leri çözer, hedef klasörü doğrular ve önizleme döndürür.</summary>
     Task<BulkBackupPreviewDto> PrepareBulkBackupAsync(string fileContent, int targetFolderId, CancellationToken ct = default);
 
-    /// <summary>Raporları yedek klasörüne taşır (orijinal konumdan kalkar). Her rapor ayrı işlenir ve audit'e yazılır.</summary>
+    /// <summary>
+    /// Her raporu yedek klasörüne "{ad}_{CUID}" adıyla kopyalar, kopya doğrulanınca orijinali siler.
+    /// Her rapor ayrı işlenir ve audit'e yazılır.
+    /// </summary>
     Task<IReadOnlyList<DeleteItemResult>> ExecuteBulkBackupAsync(IReadOnlyCollection<int> reportIds, int targetFolderId, int confirmationCount);
 }
 
@@ -37,6 +40,9 @@ public sealed class ReportService : IReportService
 
     /// <summary>TXT ile toplu işlemde tek seferde işlenebilecek rapor sayısı.</summary>
     public const int MaxBulkSize = 500;
+
+    /// <summary>BO nesne adı için güvenli üst sınır (SI_NAME).</summary>
+    public const int MaxObjectNameLength = 255;
 
     private readonly IBoReportGateway _gateway;
     private readonly IAuditLogService _audit;
@@ -118,7 +124,7 @@ public sealed class ReportService : IReportService
     }
 
     // ------------------------------------------------------------------
-    // TXT ile toplu yedekleme (yedek klasörüne taşıma)
+    // TXT ile toplu yedekleme: kopyala ({ad}_{CUID}) + orijinali sil
     // ------------------------------------------------------------------
 
     public async Task<BulkBackupPreviewDto> PrepareBulkBackupAsync(string fileContent, int targetFolderId, CancellationToken ct = default)
@@ -135,7 +141,22 @@ public sealed class ReportService : IReportService
         var folder = await GetTargetFolderAsync(targetFolderId, ct);
 
         var reports = await _gateway.GetReportsByCuidsAsync(parsed.Cuids, ct);
-        var items = await WithInstanceCountsAsync(reports, ct);
+        var withCounts = await WithInstanceCountsAsync(reports, ct);
+
+        var items = withCounts.Select(i =>
+        {
+            var r = i.Report;
+            var backupName = BuildBackupName(r.Name, r.Cuid ?? string.Empty);
+
+            if (!ReportKinds.IsCopyable(r.Kind))
+                return new BulkPreviewItemDto(r, i.InstanceCount, backupName, false,
+                    $"{r.KindDisplayName} raporları REST ile kopyalanamıyor; yalnızca Web Intelligence desteklenir.");
+
+            if (string.IsNullOrEmpty(r.Cuid))
+                return new BulkPreviewItemDto(r, i.InstanceCount, backupName, false, "Raporun CUID'i okunamadı.");
+
+            return new BulkPreviewItemDto(r, i.InstanceCount, backupName, true);
+        }).ToList();
 
         var foundCuids = new HashSet<string>(reports.Select(r => r.Cuid ?? string.Empty), StringComparer.Ordinal);
         var notFound = parsed.Cuids.Where(c => !foundCuids.Contains(c)).ToList();
@@ -150,7 +171,16 @@ public sealed class ReportService : IReportService
         ValidateConfirmation(confirmationCount, ids.Count);
 
         var folder = await GetTargetFolderAsync(targetFolderId, CancellationToken.None);
-        return await RunBatchAsync(ids, ReportOperation.BackupMove, deleteInstances: false, folder);
+        return await RunBatchAsync(ids, ReportOperation.BackupCopy, deleteInstances: false, folder);
+    }
+
+    /// <summary>Yedek kopyanın adı: "{orijinal ad}_{orijinal CUID}". Uzunsa orijinal ad kısaltılır, CUID korunur.</summary>
+    public static string BuildBackupName(string name, string cuid)
+    {
+        var suffix = "_" + cuid;
+        var maxNameLength = Math.Max(1, MaxObjectNameLength - suffix.Length);
+        var trimmed = name.Length > maxNameLength ? name[..maxNameLength].TrimEnd() : name;
+        return trimmed + suffix;
     }
 
     private async Task<FolderDto> GetTargetFolderAsync(int targetFolderId, CancellationToken ct)
@@ -188,7 +218,9 @@ public sealed class ReportService : IReportService
             DeleteItemResult result;
             if (reports.TryGetValue(id, out var report))
             {
-                result = await ProcessOneAsync(report, operation, deleteInstances, targetFolder, ct);
+                result = operation == ReportOperation.BackupCopy
+                    ? await ProcessBackupCopyAsync(report, targetFolder!, ct)
+                    : await ProcessOneAsync(report, operation, deleteInstances, targetFolder, ct);
             }
             else
             {
@@ -236,7 +268,7 @@ public sealed class ReportService : IReportService
 
             // 2) Rapor
             string message;
-            if (operation is ReportOperation.Archive or ReportOperation.BackupMove)
+            if (operation == ReportOperation.Archive)
             {
                 if (report.ParentFolderId == targetFolder!.Id)
                 {
@@ -245,9 +277,7 @@ public sealed class ReportService : IReportService
                 }
 
                 await _gateway.MoveToFolderAsync(report.Id, report.Kind, targetFolder.Id, ct);
-                message = operation == ReportOperation.BackupMove
-                    ? $"Yedek klasörüne taşındı: {targetFolder.Path}"
-                    : $"Arşiv klasörüne taşındı: {targetFolder.Path}";
+                message = $"Arşiv klasörüne taşındı: {targetFolder.Path}";
             }
             else
             {
@@ -280,9 +310,62 @@ public sealed class ReportService : IReportService
         }
     }
 
+    /// <summary>
+    /// 1) Yedek klasörüne "{ad}_{CUID}" adıyla kopyala ve kopyayı doğrula
+    /// 2) Orijinali sil ve silindiğini doğrula
+    /// Kopya oluşmazsa orijinale dokunulmaz.
+    /// </summary>
+    private async Task<DeleteItemResult> ProcessBackupCopyAsync(ReportListItemDto report, FolderDto targetFolder, CancellationToken ct)
+    {
+        const ReportOperation operation = ReportOperation.BackupCopy;
+
+        DeleteItemResult Fail(string message) =>
+            new(report.Id, report.Name, report.FolderPath, operation, false, message);
+
+        if (!ReportKinds.IsCopyable(report.Kind))
+            return Fail($"{report.KindDisplayName} raporları REST ile kopyalanamıyor; işlem yapılmadı.");
+
+        if (string.IsNullOrEmpty(report.Cuid))
+            return Fail("Raporun CUID'i okunamadı; işlem yapılmadı.");
+
+        var backupName = BuildBackupName(report.Name, report.Cuid);
+
+        // 1) Kopyala
+        CopyResult copy;
+        try
+        {
+            copy = await _gateway.CopyToFolderAsync(report.Id, report.Cuid, report.Kind, targetFolder.Id, backupName, ct);
+        }
+        catch (Exception ex) when (ex is BoException or AppValidationException)
+        {
+            _logger.LogWarning(ex, "Yedek kopya oluşturulamadı. Rapor: {ReportId} {ReportName}", report.Id, report.Name);
+            return Fail($"Yedek kopya oluşturulamadı, orijinal rapor silinmedi: {UserMessageOf(ex)}");
+        }
+
+        var copyInfo = $"{targetFolder.Path.TrimEnd('/')}/{copy.NewName} (yeni ID: {copy.NewId})"
+                       + (copy.AlreadyExisted ? " [yedek önceki bir çalıştırmada oluşturulmuştu]" : "");
+
+        // 2) Orijinali sil
+        try
+        {
+            var outcome = await _gateway.DeleteObjectAsync(report.Id, report.Kind, report.ParentFolderId, ct);
+            var deleted = outcome == DeleteOutcome.MovedToRecycleBin
+                ? "Orijinal silindi (BO Geri Dönüşüm Kutusu'na alındı)."
+                : "Orijinal silindi.";
+
+            return new DeleteItemResult(report.Id, report.Name, report.FolderPath, operation, true,
+                $"Yedeklendi: {copyInfo}. {deleted}");
+        }
+        catch (Exception ex) when (ex is BoException or AppValidationException)
+        {
+            _logger.LogWarning(ex, "Yedek oluştu ama orijinal silinemedi. Rapor: {ReportId} {ReportName}", report.Id, report.Name);
+            return Fail($"Yedek oluşturuldu ({copyInfo}) ancak orijinal silinemedi: {UserMessageOf(ex)}");
+        }
+    }
+
     private async Task WriteAuditAsync(DeleteItemResult result, ReportListItemDto? report, FolderDto? targetFolder, Guid batchId)
     {
-        var isMove = result.Operation is ReportOperation.Archive or ReportOperation.BackupMove;
+        var isMove = result.Operation is ReportOperation.Archive or ReportOperation.BackupCopy;
 
         var entry = new AuditEntry
         {

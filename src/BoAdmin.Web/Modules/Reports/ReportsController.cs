@@ -19,7 +19,7 @@ namespace BoAdmin.Web.Modules.Reports;
 ///  POST /Reports/Delete         -> silme / arşive taşıma
 ///  GET  /Reports/Bulk           -> TXT ile toplu yedekleme: dosya yükleme
 ///  POST /Reports/BulkPreview    -> TXT önizleme
-///  POST /Reports/BulkExecute    -> yedek klasörüne taşıma
+///  POST /Reports/BulkExecute    -> yedek klasörüne kopyala ({ad}_{CUID}) + orijinali sil
 ///  GET  /Reports/History        -> İşlem Geçmişi
 ///  GET  /Reports/ExportHistory  -> İşlem Geçmişi CSV
 /// </summary>
@@ -131,7 +131,7 @@ public sealed class ReportsController : Controller
     }
 
     // ------------------------------------------------------------------
-    // TXT ile toplu yedekleme (yedek klasörüne taşıma)
+    // TXT ile toplu yedekleme: kopyala ({ad}_{CUID}) + orijinali sil
     // ------------------------------------------------------------------
 
     [HttpGet]
@@ -193,7 +193,7 @@ public sealed class ReportsController : Controller
         try
         {
             var results = await _reports.ExecuteBulkBackupAsync(model.SelectedIds, model.TargetFolderId, model.ConfirmationCount);
-            return View("DeleteResult", new DeleteResultViewModel(results, ReportOperation.BackupMove));
+            return View("DeleteResult", new DeleteResultViewModel(results, ReportOperation.BackupCopy));
         }
         catch (AppValidationException ex)
         {

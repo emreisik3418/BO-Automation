@@ -268,6 +268,63 @@ public sealed class BoReportGateway : IBoReportGateway
     }
 
     // ------------------------------------------------------------------
+    // Kopyalama (TXT ile toplu yedekleme)
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Web Intelligence raporunu hedef klasöre yeni adla kopyalar (Raylight):
+    ///   POST /raylight/v1/documents?sourceId={id}
+    ///   { "document": { "name": "...", "folderId": 123 } }      (doğrulanmalı)
+    /// Kopyanın oluştuğu CMS sorgusuyla doğrulanır. Kopya yeni ID/CUID alır;
+    /// instance'lar ve zamanlamalar kopyalanmaz.
+    /// </summary>
+    public async Task<CopyResult> CopyToFolderAsync(
+        int sourceId, string sourceCuid, string kind, int targetFolderId, string newName, CancellationToken ct = default)
+    {
+        // Önceki bir çalıştırmada kopya oluşmuş ama orijinal silinememiş olabilir: yeniden kopyalama
+        var existing = await FindBackupCopyAsync(sourceCuid, targetFolderId, ct);
+        if (existing is not null)
+        {
+            _logger.LogInformation("Yedek kopya zaten var: kaynak {SourceId} -> {CopyId}", sourceId, existing.NewId);
+            return existing with { AlreadyExisted = true };
+        }
+
+        if (!ReportKinds.IsCopyable(kind))
+            throw new AppValidationException($"{ReportKinds.GetDisplayName(kind)} raporları REST ile kopyalanamıyor.");
+
+        await _client.PostJsonAsync($"raylight/v1/documents?sourceId={sourceId}",
+            new { document = new { name = newName, folderId = targetFolderId } }, ct);
+
+        var copy = await FindBackupCopyAsync(sourceCuid, targetFolderId, ct)
+            ?? throw new BoOperationException(
+                "Kopyalama isteği başarılı döndü ancak kopya yedek klasöründe bulunamadı.");
+
+        _logger.LogInformation("Rapor kopyalandı: {SourceId} -> {CopyId} '{Name}' (klasör {Folder})",
+            sourceId, copy.NewId, copy.NewName, targetFolderId);
+
+        return copy;
+    }
+
+    /// <summary>Hedef klasörde adı "_{cuid}" ile biten (orijinalin kendisi olmayan) rapor.</summary>
+    private async Task<CopyResult?> FindBackupCopyAsync(string sourceCuid, int targetFolderId, CancellationToken ct)
+    {
+        var suffix = "_" + sourceCuid;
+        var query = "SELECT SI_ID, SI_CUID, SI_NAME FROM CI_INFOOBJECTS " +
+                    $"WHERE SI_PARENTID = {targetFolderId} AND SI_INSTANCE = 0 " +
+                    $"AND SI_NAME LIKE '%{CmsQueryBuilder.Sanitize(sourceCuid)}'";
+
+        var entries = await _client.CmsQueryAllAsync(query, pageSize: 50, maxPages: 2, ct: ct);
+
+        var match = entries.FirstOrDefault(e =>
+            (e.GetString("SI_NAME") ?? string.Empty).EndsWith(suffix, StringComparison.Ordinal)
+            && !string.Equals(e.GetString("SI_CUID"), sourceCuid, StringComparison.Ordinal));
+
+        return match is null
+            ? null
+            : new CopyResult(match.GetInt("SI_ID") ?? 0, match.GetString("SI_CUID"), match.GetString("SI_NAME") ?? string.Empty, false);
+    }
+
+    // ------------------------------------------------------------------
     // Klasörler
     // ------------------------------------------------------------------
 

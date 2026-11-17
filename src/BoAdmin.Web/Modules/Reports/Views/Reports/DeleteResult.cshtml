@@ -2,7 +2,7 @@
 @inject BoAdmin.Web.Infrastructure.CurrentEnvironmentAccessor CurrentEnvironment
 @{
     ViewData["Title"] = "İşlem Sonucu";
-    var isBulk = Model.Operation == ReportOperation.BackupMove;
+    var isBulk = Model.Operation == ReportOperation.BackupCopy;
 }
 
 <partial name="_ReportsNav" model="@(isBulk ? "Bulk" : "Search")" />

@@ -12,6 +12,10 @@ public enum DeleteOutcome
     MovedToRecycleBin
 }
 
+/// <summary>Kopyalama sonucu.</summary>
+/// <param name="AlreadyExisted">Yedek kopya daha önceki bir çalıştırmada oluşturulmuştu (yeniden kopyalanmadı).</param>
+public sealed record CopyResult(int NewId, string? NewCuid, string NewName, bool AlreadyExisted);
+
 /// <summary>
 /// SAP BO rapor işlemleri (kullanıcının seçtiği ortamda). Application katmanı REST ayrıntılarını bilmez;
 /// implementasyon Infrastructure/Bo/BoReportGateway.cs içindedir.
@@ -36,6 +40,12 @@ public interface IBoReportGateway
 
     /// <summary>Raporu klasöre taşır ve taşındığını doğrular.</summary>
     Task MoveToFolderAsync(int id, string kind, int targetFolderId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Raporu hedef klasöre yeni adla kopyalar ve kopyanın oluştuğunu doğrular.
+    /// Hedefte adı "_{sourceCuid}" ile biten bir kopya zaten varsa yeniden kopyalamaz, onu döndürür.
+    /// </summary>
+    Task<CopyResult> CopyToFolderAsync(int sourceId, string sourceCuid, string kind, int targetFolderId, string newName, CancellationToken ct = default);
 
     Task<IReadOnlyList<FolderDto>> GetFoldersAsync(CancellationToken ct = default);
 

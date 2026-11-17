@@ -123,9 +123,11 @@ public sealed class BulkPreviewViewModel
     public string? FileName { get; set; }
     public string? ErrorMessage { get; set; }
 
-    /// <summary>Hedef klasörde olmayan, işlenecek raporlar.</summary>
-    public IReadOnlyList<DeletePreviewItemDto> ToProcess =>
-        Preview.Items.Where(i => i.Report.ParentFolderId != Preview.TargetFolder.Id).ToList();
+    /// <summary>Kopyalanıp silinecek raporlar.</summary>
+    public IReadOnlyList<BulkPreviewItemDto> ToProcess => Preview.Processable;
+
+    /// <summary>İşleme alınmayacak raporlar (ör. Webi dışı türler).</summary>
+    public IReadOnlyList<BulkPreviewItemDto> Skipped => Preview.Skipped;
 }
 
 /// <summary>Toplu işlem onay formundan gelen veri.</summary>
@@ -180,7 +182,7 @@ public static class OperationNames
     {
         (nameof(ReportOperation.Delete), "Silme"),
         (nameof(ReportOperation.Archive), "Arşive taşıma"),
-        (nameof(ReportOperation.BackupMove), "Toplu yedekleme (TXT)"),
+        (nameof(ReportOperation.BackupCopy), "Toplu yedekle + sil (TXT)"),
     };
 
     public static string Get(string? operation) => operation switch
@@ -188,7 +190,8 @@ public static class OperationNames
         nameof(ReportOperation.Delete) => "Silme",
         nameof(ReportOperation.Archive) => "Arşive taşıma",
         nameof(ReportOperation.DeleteInstance) => "Instance silme",
-        nameof(ReportOperation.BackupMove) => "Toplu yedekleme (TXT)",
+        nameof(ReportOperation.BackupCopy) => "Toplu yedekle + sil (TXT)",
+        "BackupMove" => "Toplu yedekleme (TXT, taşıma)", // eski kayıtlar
         _ => operation ?? string.Empty
     };
 

@@ -86,29 +86,28 @@ public enum ReportOperation
     Archive,
     DeleteInstance,
 
-    /// <summary>TXT ile toplu işlem: yedek klasörüne taşıma</summary>
-    BackupMove
+    /// <summary>TXT ile toplu işlem: yedek klasörüne kopyala (adı_CUID), sonra orijinali sil</summary>
+    BackupCopy
 }
+
+/// <summary>Toplu yedekleme önizlemesindeki bir rapor.</summary>
+/// <param name="BackupName">Kopyanın adı: {orijinal ad}_{orijinal CUID}</param>
+/// <param name="CanProcess">false ise rapor işleme alınmaz (Reason açıklar)</param>
+public sealed record BulkPreviewItemDto(
+    ReportListItemDto Report,
+    int InstanceCount,
+    string BackupName,
+    bool CanProcess,
+    string? Reason = null);
 
 /// <summary>TXT (CUID listesi) ile toplu yedekleme önizlemesi.</summary>
 public sealed record BulkBackupPreviewDto(
-    IReadOnlyList<DeletePreviewItemDto> Items,
+    IReadOnlyList<BulkPreviewItemDto> Items,
     IReadOnlyList<string> NotFoundCuids,
     IReadOnlyList<string> InvalidEntries,
     int DuplicateCount,
     FolderDto TargetFolder)
 {
-    public int TotalInstanceCount => Items.Sum(i => i.InstanceCount);
-    public int AlreadyInTargetCount => Items.Count(i => i.Report.ParentFolderId == TargetFolder.Id);
+    public IReadOnlyList<BulkPreviewItemDto> Processable => Items.Where(i => i.CanProcess).ToList();
+    public IReadOnlyList<BulkPreviewItemDto> Skipped => Items.Where(i => !i.CanProcess).ToList();
 }
-
-/// <summary>Toplu işlemde tek raporun sonucu.</summary>
-public sealed record DeleteItemResult(
-    int ReportId,
-    string ReportName,
-    string? FolderPath,
-    ReportOperation Operation,
-    bool Success,
-    string Message,
-    int InstancesDeleted = 0,
-    int InstancesFailed = 0);

@@ -66,8 +66,10 @@ prod'da `D:\Logs\BoAdmin\audit`. IIS app pool kimliğine bu klasörde **Modify**
 ## Rapor İşlemleri
 
 - **Rapor Arama:** filtre, sıralama, sayfalama; tekli/çoklu silme veya arşive taşıma (önizleme + sayı ile onay)
-- **Toplu Silme (TXT):** CUID listesi yüklenir, yedek klasör ID'si girilir; raporlar yedek klasörüne
-  taşınarak bulundukları yerden kaldırılır (CUID, instance ve zamanlamalar korunur). En fazla 500 CUID.
+- **Toplu Silme (TXT):** CUID listesi yüklenir, yedekleme klasörü ID'si girilir. Her rapor yedekleme klasörüne
+  `{rapor adı}_{orijinal CUID}` adıyla kopyalanır (Raylight, yalnızca Web Intelligence), kopya doğrulanınca
+  orijinal silinir. Kopya oluşmazsa orijinale dokunulmaz; yeniden çalıştırmada var olan yedek tekrar kopyalanmaz.
+  Kopya yeni CUID alır, instance ve zamanlamalar kopyalanmaz. En fazla 500 CUID.
 - **İşlem Geçmişi:** ortam bazlı filtre, CSV dışa aktarma
 
 ## Kod parçaları (ilerleme)

@@ -29,6 +29,13 @@ public static class ReportKinds
         All.FirstOrDefault(k => string.Equals(k.Kind, kind, StringComparison.OrdinalIgnoreCase))?.DisplayName
         ?? kind ?? string.Empty;
 
+    /// <summary>
+    /// REST ile kopyalanabilen türler. Kopyalama Raylight (Web Intelligence) API'si ile yapılır;
+    /// Crystal ve diğer dosya türleri için /biprws'te kopyalama uç noktası yok (doğrulanmalı).
+    /// </summary>
+    public static bool IsCopyable(string? kind) =>
+        string.Equals(kind, Webi, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Doğru yazımı döndürür ("webi" -> "Webi").</summary>
     public static string? Normalize(string? kind) =>
         All.FirstOrDefault(k => string.Equals(k.Kind, kind, StringComparison.OrdinalIgnoreCase))?.Kind;

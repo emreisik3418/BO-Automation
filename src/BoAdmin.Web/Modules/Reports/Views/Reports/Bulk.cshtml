@@ -19,9 +19,14 @@
         }
 
         <div class="alert alert-info small">
-            Listedeki raporlar önce girdiğiniz <strong>yedek klasörüne taşınır</strong> ve böylece bulundukları
-            klasörden kalkar. Raporun CUID'i, instance'ları ve zamanlamaları korunur; gerekirse yedek klasöründen
-            geri taşınabilir. Bir sonraki adımda tüm raporları görüp onaylamadan hiçbir işlem yapılmaz.
+            Listedeki her rapor önce girdiğiniz <strong>yedek klasörüne kopyalanır</strong>; kopyanın adı
+            <code>{rapor adı}_{orijinal CUID}</code> olur. Kopya oluştuğu doğrulandıktan sonra
+            <strong>orijinal rapor silinir</strong>. Kopya oluşmazsa orijinale dokunulmaz.
+            <ul class="mb-0 mt-1">
+                <li>Yalnızca Web Intelligence raporları kopyalanabilir; diğer türler önizlemede ayrıca listelenir ve işlenmez.</li>
+                <li>Kopya yeni bir CUID alır; orijinalin instance'ları ve zamanlamaları kopyalanmaz.</li>
+            </ul>
+            Bir sonraki adımda tüm raporları ve yeni adlarını görüp onaylamadan hiçbir işlem yapılmaz.
         </div>
 
         <form method="post" asp-action="BulkPreview" enctype="multipart/form-data" class="card card-body shadow-sm">
@@ -35,7 +40,7 @@
             </div>
 
             <div class="mb-3">
-                <label for="targetFolderId" class="form-label">Yedek klasör ID (SI_ID)</label>
+                <label for="targetFolderId" class="form-label">Yedekleme klasörü ID (SI_ID)</label>
                 <input type="number" class="form-control w-auto" id="targetFolderId" name="targetFolderId"
                        value="@Model.TargetFolderId" min="1" required />
                 <div class="form-text">
