@@ -30,7 +30,8 @@ Bağımlılık yönü: `Web → Application ← Infrastructure` (Web, compositio
    { "SapBo": { "Password": "..." } }
    ```
 2. Prod ortamında ortam değişkeni: `SapBo__Password` (IIS app pool ortam değişkeni).
-3. Audit veritabanı geliştirmede LocalDB (`BoAdmin_Dev`), ilk çalıştırmada otomatik oluşturulur.
+3. Audit kayıtları veritabanına değil, aylık JSON Lines dosyalarına yazılır: `Audit:Directory` altında `audit-2026-11.jsonl`.
+   Geliştirmede `logs/audit`, prod'da `D:\Logs\BoAdmin\audit`. IIS app pool kimliğine bu klasörde **Modify** yetkisi verilmeli.
 
 ## `SapBo` ayarları
 
@@ -49,6 +50,6 @@ Bağımlılık yönü: `Web → Application ← Infrastructure` (Web, compositio
 - [x] Parça 2: Yetkilendirme (handler, policy, menü erişimi)
 - [x] Parça 3: BO oturum servisi + REST client
 - [x] Parça 4: Rapor gateway + rapor servisi
-- [x] Parça 5: Audit log (+ hata filtresi, view konumları)
+- [x] Parça 5: Audit log - dosya tabanlı (+ hata filtresi, view konumları)
 - [ ] Parça 6: Controller'lar + view'lar + layout
 - [ ] Parça 7: IIS kurulumu (`web.config`, adımlar)

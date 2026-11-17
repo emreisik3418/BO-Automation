@@ -2,10 +2,8 @@ using System.Net.Http.Headers;
 using BoAdmin.Application.Abstractions;
 using BoAdmin.Application.Audit;
 using BoAdmin.Infrastructure.Audit;
+using Microsoft.Extensions.Hosting;
 using BoAdmin.Infrastructure.Bo;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -51,60 +49,38 @@ public static class DependencyInjection
         services.AddScoped<FolderPathCache>();
         services.AddScoped<IBoReportGateway, BoReportGateway>();
 
-        // ---------------- Audit log ----------------
-        var auditConnection = configuration.GetConnectionString("AuditDb");
-        if (string.IsNullOrWhiteSpace(auditConnection))
-            throw new InvalidOperationException("ConnectionStrings:AuditDb tanımlı değil.");
+        // ---------------- Audit log (dosya) ----------------
+        services.AddOptions<AuditOptions>()
+            .Bind(configuration.GetSection(AuditOptions.SectionName));
 
-        services.AddDbContextFactory<AuditDbContext>(options =>
-            options.UseSqlServer(auditConnection, sql => sql.EnableRetryOnFailure(3)));
-
-        services.AddSingleton<IAuditLogService, EfAuditLogService>();
+        services.AddSingleton<FileAuditLogService>();
+        services.AddSingleton<IAuditLogService>(sp => sp.GetRequiredService<FileAuditLogService>());
 
         return services;
     }
 
     /// <summary>
-    /// Uygulama başlarken audit tablosunu hazırlar:
-    ///  - Veritabanı yoksa oluşturur (geliştirme / LocalDB)
-    ///  - Veritabanı var ama tablo yoksa tabloyu oluşturur
-    /// Yetki yoksa hata loglanır, uygulama yine açılır (kayıtlar dosya loguna düşmeye devam eder).
-    /// Prod'da tabloyu DBA oluşturacaksa: db/AuditLog.sql
+    /// Uygulama başlarken audit klasörünün yazılabilir olduğunu kontrol eder.
+    /// Yazılamıyorsa kritik log düşer; uygulama yine açılır (kayıtlar uygulama loguna düşmeye devam eder).
     /// </summary>
-    public static async Task InitializeInfrastructureAsync(this IServiceProvider services)
+    public static Task InitializeInfrastructureAsync(this IServiceProvider services)
     {
         var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("BoAdmin.Startup");
+        var audit = services.GetRequiredService<FileAuditLogService>();
 
         try
         {
-            var factory = services.GetRequiredService<IDbContextFactory<AuditDbContext>>();
-            await using var db = await factory.CreateDbContextAsync();
-            var creator = db.GetService<IRelationalDatabaseCreator>();
-
-            if (!await creator.ExistsAsync())
-            {
-                await creator.CreateAsync();
-                await creator.CreateTablesAsync();
-                logger.LogInformation("Audit veritabanı ve AuditLog tablosu oluşturuldu.");
-                return;
-            }
-
-            var tableExists = await db.Database
-                .SqlQueryRaw<int>("SELECT CASE WHEN OBJECT_ID(N'dbo.AuditLog', N'U') IS NULL THEN 0 ELSE 1 END AS [Value]")
-                .SingleAsync() == 1;
-
-            if (!tableExists)
-            {
-                await creator.CreateTablesAsync();
-                logger.LogInformation("AuditLog tablosu oluşturuldu.");
-            }
+            audit.EnsureWritable();
+            logger.LogInformation("Audit klasörü hazır: {Directory}", audit.AuditDirectory);
         }
         catch (Exception ex)
         {
             logger.LogCritical(ex,
-                "Audit veritabanı hazırlanamadı. İşlem geçmişi veritabanına yazılamayacak (dosya logu devam eder). " +
-                "Bağlantı dizesini ve yetkileri kontrol edin veya db/AuditLog.sql'i çalıştırın.");
+                "Audit klasörüne yazılamıyor: {Directory}. Uygulama havuzu kimliğine bu klasörde 'Modify' yetkisi verin.",
+                audit.AuditDirectory);
         }
+
+        return Task.CompletedTask;
     }
 
     private static void ConfigureBoHttpClient(IServiceProvider sp, HttpClient client)
