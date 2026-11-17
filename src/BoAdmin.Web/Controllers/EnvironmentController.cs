@@ -33,14 +33,7 @@ public sealed class EnvironmentController : Controller
             return RedirectToAction("Index", "Home");
         }
 
-        Response.Cookies.Append(CurrentEnvironmentAccessor.CookieName, env.Key, new CookieOptions
-        {
-            HttpOnly = true,
-            IsEssential = true,
-            Secure = Request.IsHttps,
-            SameSite = SameSiteMode.Lax,
-            Expires = DateTimeOffset.UtcNow.AddYears(1)
-        });
+        CurrentEnvironmentAccessor.WriteCookie(Response, env.Key);
 
         _logger.LogInformation("{User} ortam değiştirdi: {Environment}", User.Identity?.Name, env.Key);
         TempData["Success"] = $"{env.DisplayName} ortamına geçildi.";

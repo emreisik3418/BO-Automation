@@ -1,0 +1,506 @@
+/* =========================================================
+   BO Yönetim - Giriş ekranı
+   Harici font/CDN kullanılmaz (intranet uyumlu).
+   ========================================================= */
+
+:root {
+    --auth-ink: #0f172a;
+    --auth-muted: #64748b;
+    --auth-line: #e2e8f0;
+    --auth-soft: #f8fafc;
+    --auth-brand: #4f46e5;
+    --auth-brand-2: #2563eb;
+    --auth-accent: #0ea5e9;
+    --auth-radius: 20px;
+}
+
+.auth-body {
+    margin: 0;
+    min-height: 100vh;
+    background: #eef2f7;
+    color: var(--auth-ink);
+    font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+.auth-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    min-height: 100vh;
+}
+
+/* ---------------- Marka paneli ---------------- */
+
+.auth-brand {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 2rem;
+    padding: 3rem 3.5rem;
+    color: #fff;
+    background:
+        radial-gradient(900px 500px at -10% -10%, rgba(14, 165, 233, .45), transparent 60%),
+        radial-gradient(800px 500px at 110% 110%, rgba(99, 102, 241, .55), transparent 60%),
+        linear-gradient(140deg, #0b1224 0%, #172554 50%, #312e81 100%);
+}
+
+/* İnce ızgara dokusu */
+.auth-brand::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(255, 255, 255, .06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, .06) 1px, transparent 1px);
+    background-size: 36px 36px;
+    -webkit-mask-image: radial-gradient(ellipse at 30% 40%, #000 20%, transparent 70%);
+    mask-image: radial-gradient(ellipse at 30% 40%, #000 20%, transparent 70%);
+    pointer-events: none;
+}
+
+/* Yumuşak ışık halkası */
+.auth-brand::after {
+    content: "";
+    position: absolute;
+    width: 420px;
+    height: 420px;
+    right: -120px;
+    top: 18%;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, .12);
+    box-shadow: 0 0 0 60px rgba(255, 255, 255, .03), 0 0 0 120px rgba(255, 255, 255, .02);
+    pointer-events: none;
+}
+
+.auth-brand > * {
+    position: relative;
+    z-index: 1;
+}
+
+.brand-head {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+}
+
+.brand-mark {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    color: #fff;
+    background: rgba(255, 255, 255, .12);
+    border: 1px solid rgba(255, 255, 255, .2);
+    backdrop-filter: blur(6px);
+}
+
+.brand-name {
+    font-weight: 600;
+    font-size: 1.125rem;
+    letter-spacing: .01em;
+}
+
+.brand-title {
+    font-size: clamp(1.75rem, 2.6vw, 2.6rem);
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -.02em;
+    margin: 0 0 1rem;
+}
+
+.brand-lead {
+    max-width: 30rem;
+    font-size: 1.05rem;
+    color: rgba(255, 255, 255, .78);
+    margin-bottom: 2.25rem;
+}
+
+.feature-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 1rem;
+    max-width: 28rem;
+}
+
+.feature-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: .875rem;
+}
+
+.feature-list strong {
+    display: block;
+    font-weight: 600;
+}
+
+.feature-list span {
+    color: rgba(255, 255, 255, .7);
+    font-size: .925rem;
+}
+
+.feature-icon {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    font-size: .85rem;
+    color: #fff !important;
+    background: linear-gradient(135deg, rgba(14, 165, 233, .9), rgba(99, 102, 241, .9));
+    box-shadow: 0 6px 16px -6px rgba(14, 165, 233, .8);
+}
+
+.brand-footer {
+    font-size: .85rem;
+    color: rgba(255, 255, 255, .55);
+}
+
+/* ---------------- Giriş kartı ---------------- */
+
+.auth-main {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2.5rem 1.5rem;
+}
+
+.auth-card {
+    width: 100%;
+    max-width: 460px;
+    background: #fff;
+    border-radius: var(--auth-radius);
+    padding: 2.5rem 2.25rem 2rem;
+    box-shadow:
+        0 1px 2px rgba(15, 23, 42, .05),
+        0 24px 60px -18px rgba(15, 23, 42, .28);
+    animation: auth-rise .45s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+@keyframes auth-rise {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.auth-title {
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: -.015em;
+    margin: 0 0 .375rem;
+}
+
+.auth-subtitle {
+    color: var(--auth-muted);
+    margin-bottom: 1.5rem;
+}
+
+.auth-alert {
+    border-radius: 12px;
+    padding: .7rem .9rem;
+    font-size: .9rem;
+    margin-bottom: 1.25rem;
+}
+
+.auth-alert-info {
+    background: #eff6ff;
+    color: #1e40af;
+    border: 1px solid #bfdbfe;
+}
+
+.auth-alert-error {
+    background: #fef2f2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+
+/* Kimlik kutusu */
+.identity {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    border: 1px solid var(--auth-line);
+    border-radius: 16px;
+    background: var(--auth-soft);
+}
+
+.avatar {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    color: #fff;
+    font-weight: 600;
+    font-size: 1.15rem;
+    letter-spacing: .02em;
+    background: linear-gradient(135deg, var(--auth-brand), var(--auth-accent));
+    box-shadow: 0 8px 18px -8px rgba(79, 70, 229, .7);
+}
+
+.identity-text {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.identity-name {
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+.identity-meta {
+    color: var(--auth-muted);
+    font-size: .85rem;
+}
+
+.sso-badge {
+    flex: 0 0 auto;
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: .375rem;
+    padding: .2rem .6rem;
+    border-radius: 999px;
+    font-size: .75rem;
+    font-weight: 600;
+    color: #047857;
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+}
+
+.sso-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, .2);
+}
+
+/* Ortam seçimi */
+.field-label {
+    font-size: .8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--auth-muted);
+    margin-bottom: .6rem;
+}
+
+.env-list {
+    display: grid;
+    gap: .6rem;
+}
+
+.env-option {
+    position: relative;
+}
+
+.env-option input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.env-option label {
+    display: flex;
+    align-items: center;
+    gap: .85rem;
+    padding: .85rem 1rem;
+    border: 1.5px solid var(--auth-line);
+    border-radius: 14px;
+    background: #fff;
+    cursor: pointer;
+    transition: border-color .15s, background-color .15s, box-shadow .15s;
+}
+
+.env-option label:hover {
+    border-color: #c7d2fe;
+    background: #fafbff;
+}
+
+.env-option input:checked + label {
+    border-color: var(--auth-brand);
+    background: #eef2ff;
+    box-shadow: 0 0 0 4px rgba(79, 70, 229, .12);
+}
+
+.env-option input:focus-visible + label {
+    outline: 2px solid var(--auth-brand);
+    outline-offset: 2px;
+}
+
+.env-dot {
+    flex: 0 0 auto;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    box-shadow: 0 0 0 4px rgba(15, 23, 42, .05);
+}
+
+.env-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.env-name {
+    font-weight: 600;
+}
+
+.env-key {
+    margin-left: .35rem;
+    font-size: .7rem;
+    font-weight: 600;
+    letter-spacing: .05em;
+    color: var(--auth-muted);
+    border: 1px solid var(--auth-line);
+    border-radius: 6px;
+    padding: .05rem .35rem;
+    vertical-align: middle;
+}
+
+.env-modules {
+    font-size: .82rem;
+    color: var(--auth-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.env-check {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1.5px solid #cbd5e1;
+    transition: all .15s;
+}
+
+.env-option input:checked + label .env-check {
+    border-color: var(--auth-brand);
+    background: var(--auth-brand) radial-gradient(circle, #fff 0 3px, transparent 3.5px);
+}
+
+/* Ana buton */
+.btn-auth {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    width: 100%;
+    padding: .85rem 1rem;
+    border: 0;
+    border-radius: 14px;
+    font-weight: 600;
+    font-size: 1rem;
+    color: #fff;
+    background: linear-gradient(135deg, var(--auth-brand), var(--auth-brand-2));
+    box-shadow: 0 12px 24px -12px rgba(79, 70, 229, .75);
+    transition: transform .15s, box-shadow .15s, filter .15s;
+}
+
+.btn-auth:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.05);
+    box-shadow: 0 16px 28px -12px rgba(79, 70, 229, .85);
+}
+
+.btn-auth:active {
+    transform: none;
+}
+
+.btn-auth:focus-visible {
+    outline: 3px solid rgba(79, 70, 229, .35);
+    outline-offset: 2px;
+}
+
+/* Yetkisiz durum */
+.no-access {
+    display: flex;
+    gap: .85rem;
+    align-items: flex-start;
+    padding: 1rem;
+    border-radius: 14px;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    color: #9a3412;
+    font-size: .925rem;
+}
+
+.no-access-icon {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: #ffedd5;
+}
+
+.auth-footer {
+    margin: 1.75rem 0 0;
+    font-size: .8rem;
+    color: var(--auth-muted);
+    text-align: center;
+}
+
+/* ---------------- Mobil / dar ekran ---------------- */
+
+@media (max-width: 991.98px) {
+    .auth-shell {
+        grid-template-columns: 1fr;
+    }
+
+    .auth-brand {
+        padding: 1.75rem 1.5rem 2.25rem;
+        gap: 1.25rem;
+    }
+
+    .auth-brand::after,
+    .feature-list,
+    .brand-footer {
+        display: none;
+    }
+
+    .brand-title {
+        font-size: 1.5rem;
+    }
+
+    .brand-lead {
+        margin-bottom: 0;
+        font-size: .95rem;
+    }
+
+    .auth-main {
+        padding: 0 1rem 2rem;
+        margin-top: -1.25rem;
+    }
+
+    .auth-card {
+        padding: 1.75rem 1.25rem 1.5rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .auth-card,
+    .btn-auth,
+    .env-option label,
+    .env-check {
+        animation: none;
+        transition: none;
+    }
+}

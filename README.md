@@ -22,6 +22,12 @@ Bağımlılık yönü: `Web → Application ← Infrastructure` (Web, compositio
 | Kullanıcı İşlemleri (`Users`) | Yakında |
 | Grup İşlemleri (`Groups`) | Yakında |
 
+## Giriş ekranı
+
+Kimlik doğrulama Windows Authentication ile otomatik yapılır; şifre sorulmaz. Tarayıcı oturumunun ilk
+açılışında `/Account/Login` ekranı kullanıcının adını, sicilini ve yetkili olduğu ortamları gösterir;
+kullanıcı ortamı seçip "Uygulamaya gir" der. "Çıkış" yalnızca uygulamadan çıkarır, Windows oturumu açık kalır.
+
 ## Ortamlar (DEV / TEST / PROD)
 
 Birden fazla BO ortamı `SapBo:Environments` altında tanımlanır. Kullanıcı sağ üstteki **Ortam** menüsünden

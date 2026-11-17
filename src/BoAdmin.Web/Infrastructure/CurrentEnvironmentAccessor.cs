@@ -31,6 +31,17 @@ public sealed class CurrentEnvironmentAccessor : ICurrentEnvironment
         _accessService = accessService;
     }
 
+    /// <summary>Seçilen ortamı cookie'ye yazar (1 yıl).</summary>
+    public static void WriteCookie(HttpResponse response, string environmentKey) =>
+        response.Cookies.Append(CookieName, environmentKey, new CookieOptions
+        {
+            HttpOnly = true,
+            IsEssential = true,
+            Secure = response.HttpContext.Request.IsHttps,
+            SameSite = SameSiteMode.Lax,
+            Expires = DateTimeOffset.UtcNow.AddYears(1)
+        });
+
     public string Key => Current.Key;
     public string DisplayName => Current.DisplayName;
     public string Color => Current.Color;

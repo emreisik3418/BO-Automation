@@ -22,6 +22,9 @@
                             @CurrentUser.DisplayName
                             <span class="opacity-75">(@CurrentUser.Sicil)</span>
                         </span>
+                        <form method="post" asp-controller="Account" asp-action="Logout" class="m-0">
+                            <button type="submit" class="btn btn-sm btn-outline-light" title="Giriş ekranına dön">Çıkış</button>
+                        </form>
                     </div>
                 }
             </div>

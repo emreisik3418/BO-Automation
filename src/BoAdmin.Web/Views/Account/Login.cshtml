@@ -1,0 +1,133 @@
+@model LoginViewModel
+@{
+    Layout = "_AuthLayout";
+    ViewData["Title"] = "Giriş";
+}
+
+<div class="auth-shell">
+
+    @* ---------------- Sol: marka paneli ---------------- *@
+    <aside class="auth-brand">
+        <div class="brand-head">
+            <span class="brand-mark" aria-hidden="true">
+                <svg viewBox="0 0 32 32" width="28" height="28" fill="none">
+                    <rect x="5" y="17" width="5" height="10" rx="1.5" fill="currentColor" opacity=".55" />
+                    <rect x="13.5" y="11" width="5" height="16" rx="1.5" fill="currentColor" opacity=".8" />
+                    <rect x="22" y="5" width="5" height="22" rx="1.5" fill="currentColor" />
+                </svg>
+            </span>
+            <span class="brand-name">BO Yönetim</span>
+        </div>
+
+        <div class="brand-body">
+            <h1 class="brand-title">SAP BusinessObjects<br />yönetimi tek ekranda.</h1>
+            <p class="brand-lead">Raporları arayın, güvenle yedekleyip temizleyin, her işlemin kaydını tutun.</p>
+
+            <ul class="feature-list">
+                <li>
+                    <span class="feature-icon" aria-hidden="true">&#10003;</span>
+                    <div><strong>Ortam bazlı yetki</strong><span>TEST ve PROD için ayrı izinler</span></div>
+                </li>
+                <li>
+                    <span class="feature-icon" aria-hidden="true">&#10003;</span>
+                    <div><strong>Önizleme ve onay</strong><span>Hiçbir silme önizlemesiz yapılmaz</span></div>
+                </li>
+                <li>
+                    <span class="feature-icon" aria-hidden="true">&#10003;</span>
+                    <div><strong>Tam işlem geçmişi</strong><span>Kim, ne zaman, hangi rapor</span></div>
+                </li>
+            </ul>
+        </div>
+
+        <div class="brand-footer">SAP BusinessObjects 4.3 &middot; BI Platform REST</div>
+    </aside>
+
+    @* ---------------- Sağ: giriş kartı ---------------- *@
+    <main class="auth-main">
+        <div class="auth-card">
+
+            @if (TempData["LoginInfo"] is string info)
+            {
+                <div class="auth-alert auth-alert-info" role="status">@info</div>
+            }
+            @if (TempData["LoginError"] is string error)
+            {
+                <div class="auth-alert auth-alert-error" role="alert">@error</div>
+            }
+
+            <h2 class="auth-title">@(Model.HasAccess ? "Hoş geldiniz" : "Erişim yetkiniz yok")</h2>
+            <p class="auth-subtitle">
+                @(Model.HasAccess
+                    ? "Windows hesabınızla otomatik olarak tanındınız. Çalışmak istediğiniz ortamı seçin."
+                    : "Windows hesabınızla tanındınız ancak bu uygulamada hiçbir ortam için yetkiniz bulunmuyor.")
+            </p>
+
+            @* Kimlik *@
+            <div class="identity">
+                <div class="avatar" aria-hidden="true">@Model.Initials</div>
+                <div class="identity-text">
+                    <div class="identity-name">@Model.DisplayName</div>
+                    <div class="identity-meta">Sicil: <strong>@Model.Sicil</strong></div>
+                    <div class="identity-meta text-truncate">@Model.UserName</div>
+                </div>
+                <span class="sso-badge" title="Kimlik Windows (Active Directory) ile doğrulandı">
+                    <span class="sso-dot" aria-hidden="true"></span>Windows
+                </span>
+            </div>
+
+            @if (Model.HasAccess)
+            {
+                <form method="post" asp-action="Login" class="mt-4">
+                    <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
+
+                    <fieldset>
+                        <legend class="field-label">Ortam</legend>
+                        <div class="env-list">
+                            @foreach (var env in Model.Environments)
+                            {
+                                var id = "env-" + env.Key;
+                                <div class="env-option">
+                                    <input type="radio" name="environment" id="@id" value="@env.Key" checked="@env.IsSelected" required />
+                                    <label for="@id">
+                                        <span class="env-dot bg-@env.Color" aria-hidden="true"></span>
+                                        <span class="env-text">
+                                            <span class="env-name">@env.DisplayName <span class="env-key">@env.Key</span></span>
+                                            <span class="env-modules">
+                                                @(env.Modules.Count > 0 ? string.Join(" · ", env.Modules) : "Henüz aktif modül yok")
+                                            </span>
+                                        </span>
+                                        <span class="env-check" aria-hidden="true"></span>
+                                    </label>
+                                </div>
+                            }
+                        </div>
+                    </fieldset>
+
+                    <button type="submit" class="btn-auth mt-4">
+                        Uygulamaya gir
+                        <span aria-hidden="true">&rarr;</span>
+                    </button>
+                </form>
+            }
+            else
+            {
+                <div class="no-access mt-4">
+                    <span class="no-access-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="4" y="11" width="16" height="10" rx="2" />
+                            <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                        </svg>
+                    </span>
+                    <div>
+                        Yetki talebi için <strong>sicil numaranızla</strong> sistem yöneticinize başvurun.
+                        Yetkiniz tanımlandıktan sonra bu sayfayı yenilemeniz yeterli.
+                    </div>
+                </div>
+            }
+
+            <p class="auth-footer">
+                Şifre girmeniz gerekmez; kimliğiniz şirket ağındaki Windows oturumunuzdan alınır.
+            </p>
+        </div>
+    </main>
+</div>

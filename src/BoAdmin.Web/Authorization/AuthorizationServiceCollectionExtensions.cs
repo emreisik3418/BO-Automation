@@ -1,6 +1,7 @@
 using BoAdmin.Application.Common;
 using BoAdmin.Web.Infrastructure;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 
 namespace BoAdmin.Web.Authorization;
 
@@ -24,6 +25,9 @@ public static class AuthorizationServiceCollectionExtensions
         // Seçili ortam istek bazında çözülür
         services.AddScoped<CurrentEnvironmentAccessor>();
         services.AddScoped<ICurrentEnvironment>(sp => sp.GetRequiredService<CurrentEnvironmentAccessor>());
+
+        // Giriş ekranından geçmemiş kullanıcıyı giriş ekranına yönlendir
+        services.Configure<MvcOptions>(o => o.Filters.Add<EntryGateFilter>());
 
         // Handler seçili ortamı kullandığı için scoped
         services.AddScoped<IAuthorizationHandler, ModuleAuthorizationHandler>();
