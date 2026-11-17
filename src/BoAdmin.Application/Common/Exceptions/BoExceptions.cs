@@ -32,7 +32,8 @@ public sealed class BoUnavailableException : BoException
 public sealed class BoAuthenticationException : BoException
 {
     public BoAuthenticationException(string technicalMessage, string? boErrorCode = null, int? httpStatus = null, Exception? inner = null)
-        : base("SAP BO oturumu açılamadı. Servis hesabı bilgileri hatalı olabilir veya oturum süresi dolmuş olabilir.",
+        : base("SAP BO oturumu açılamadı. Servis hesabı bilgileri hatalı olabilir veya oturum süresi dolmuş olabilir." +
+               $" (BO yanıtı: {(boErrorCode is null ? "" : boErrorCode + " - ")}{technicalMessage})",
             technicalMessage, inner, boErrorCode, httpStatus) { }
 }
 
