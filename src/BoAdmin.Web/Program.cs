@@ -5,6 +5,7 @@ using BoAdmin.Web.Authorization;
 using BoAdmin.Web.Infrastructure;
 using BoAdmin.Web.Modules;
 using Microsoft.AspNetCore.Authentication.Negotiate;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Serilog;
 
@@ -81,6 +82,21 @@ try
 
     // 403 -> Erişim Reddedildi, 404 -> Bulunamadı vb.
     app.UseStatusCodePagesWithReExecute("/Error/{0}");
+
+    // 401'i hata sayfasına yönlendirme: Windows Auth (Negotiate/Kerberos/NTLM) el sıkışması
+    // birden fazla 401 ile ilerler. Araya hata sayfası girerse
+    // "Attempting to use an incomplete authentication context" hatası oluşur.
+    app.Use(async (context, next) =>
+    {
+        await next();
+
+        if (context.Response.StatusCode == StatusCodes.Status401Unauthorized)
+        {
+            var statusCodePages = context.Features.Get<IStatusCodePagesFeature>();
+            if (statusCodePages is not null)
+                statusCodePages.Enabled = false;
+        }
+    });
 
     app.UseHttpsRedirection();
     app.UseStaticFiles();
