@@ -1,0 +1,27 @@
+## Visual Studio / .NET
+.vs/
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+publish/
+*.pubxml.user
+TestResults/
+
+## Rider / VS Code
+.idea/
+.vscode/
+
+## Uygulama logları
+logs/
+*.log
+
+## Yerel yapılandırma (şifre vb. asla commit edilmesin)
+appsettings.*.local.json
+secrets.json
