@@ -1,0 +1,26 @@
+@model ErrorViewModel
+@{
+    ViewData["Title"] = Model?.Title ?? "Hata";
+}
+
+<div class="row justify-content-center">
+    <div class="col-lg-7">
+        <div class="card border-danger shadow-sm">
+            <div class="card-body">
+                <h1 class="h4 text-danger">@(Model?.Title ?? "Bir hata oluştu")</h1>
+                <p class="mb-3">@(Model?.Message ?? "İşleminiz sırasında beklenmeyen bir hata oluştu.")</p>
+
+                @if (Model?.ShowRequestId == true)
+                {
+                    <p class="text-muted small mb-3">
+                        İz numarası: <code>@Model.RequestId</code><br />
+                        Sorun devam ederse bu numarayla sistem yöneticisine başvurun.
+                    </p>
+                }
+
+                <a class="btn btn-outline-secondary btn-sm" href="javascript:history.back()">Geri dön</a>
+                <a class="btn btn-primary btn-sm" asp-controller="Home" asp-action="Index">Ana sayfa</a>
+            </div>
+        </div>
+    </div>
+</div>

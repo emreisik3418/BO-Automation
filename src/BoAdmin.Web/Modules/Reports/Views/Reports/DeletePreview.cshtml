@@ -1,0 +1,132 @@
+@model DeletePreviewViewModel
+@{
+    ViewData["Title"] = "Silme Önizleme";
+    var p = Model.Preview;
+}
+
+<partial name="_ReportsNav" model="@("Search")" />
+
+<h1 class="h5 mb-3">Silme önizleme</h1>
+
+@if (Model.ErrorMessage is not null)
+{
+    <div class="alert alert-danger">@Model.ErrorMessage</div>
+}
+
+@if (p.NotFoundIds.Count > 0)
+{
+    <div class="alert alert-warning small">
+        <strong>@p.NotFoundIds.Count</strong> seçim BO'da bulunamadı veya desteklenen bir rapor türü değil; işleme alınmayacak.
+        <span class="text-muted">(ID: @string.Join(", ", p.NotFoundIds))</span>
+    </div>
+}
+
+@if (p.Items.Count == 0)
+{
+    <div class="alert alert-info">İşlenecek rapor yok.</div>
+    <a asp-action="Index" class="btn btn-outline-secondary btn-sm">Rapor aramaya dön</a>
+}
+else
+{
+    <div class="card shadow-sm mb-3">
+        <div class="card-header">
+            İşlenecek raporlar: <strong>@p.Items.Count</strong>
+            <span class="text-muted small ms-2">Toplam instance: @p.TotalInstanceCount</span>
+        </div>
+        <div class="table-responsive preview-table">
+            <table class="table table-sm mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Rapor adı</th>
+                        <th>Tip</th>
+                        <th>Klasör</th>
+                        <th>Sahip</th>
+                        <th class="text-nowrap">Son değişiklik</th>
+                        <th class="text-end">Instance</th>
+                        <th>ID</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in p.Items)
+                    {
+                        var r = item.Report;
+                        <tr>
+                            <td>@r.Name</td>
+                            <td><span class="badge text-bg-light border">@r.KindDisplayName</span></td>
+                            <td class="small text-muted">@r.FolderPath</td>
+                            <td>@r.Owner</td>
+                            <td class="text-nowrap">@r.UpdatedAt?.ToString("dd.MM.yyyy HH:mm")</td>
+                            <td class="text-end">@item.InstanceCount</td>
+                            <td class="small text-muted">@r.Id</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <form method="post" asp-action="Delete" id="deleteForm" class="card card-body shadow-sm">
+        @foreach (var item in p.Items)
+        {
+            <input type="hidden" name="SelectedIds" value="@item.Report.Id" />
+        }
+
+        <fieldset class="mb-3">
+            <legend class="h6">İşlem türü</legend>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="MoveToArchive" id="opDelete" value="false" checked="@(!Model.MoveToArchive)" />
+                <label class="form-check-label" for="opDelete">Kalıcı olarak sil</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="MoveToArchive" id="opArchive" value="true"
+                       checked="@(Model.MoveToArchive && p.IsArchiveAvailable)" disabled="@(!p.IsArchiveAvailable)" />
+                <label class="form-check-label" for="opArchive">
+                    Kurtarılabilir silme: arşiv klasörüne taşı
+                    @if (p.ArchiveFolder is not null)
+                    {
+                        <span class="text-muted small">(@p.ArchiveFolder.Path)</span>
+                    }
+                    else
+                    {
+                        <span class="text-muted small">(arşiv klasörü tanımlı değil)</span>
+                    }
+                </label>
+            </div>
+        </fieldset>
+
+        <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="DeleteInstances" id="deleteInstances" value="true"
+                   checked="@Model.DeleteInstances" disabled="@(p.TotalInstanceCount == 0)" />
+            <label class="form-check-label" for="deleteInstances">
+                Instance'ları (zamanlanmış çıktıları) da sil
+                <span class="text-muted small">(@p.TotalInstanceCount adet)</span>
+            </label>
+        </div>
+
+        @if (Model.IsMulti)
+        {
+            <div class="mb-3">
+                <label for="confirmCount" class="form-label">
+                    Onaylamak için işlenecek rapor sayısını yazın: <strong>@p.Items.Count</strong>
+                </label>
+                <input type="number" class="form-control form-control-sm w-auto" id="confirmCount" name="ConfirmationCount"
+                       data-expected="@p.Items.Count" min="1" autocomplete="off" required />
+            </div>
+        }
+        else
+        {
+            <input type="hidden" name="ConfirmationCount" value="1" />
+        }
+
+        <div class="alert alert-warning small" id="deleteWarning">Kalıcı silme geri alınamaz.</div>
+
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-danger" id="confirmBtn" disabled="@Model.IsMulti">Onayla ve sil</button>
+            <a asp-action="Index" class="btn btn-outline-secondary">Vazgeç</a>
+        </div>
+    </form>
+}
+
+@section Scripts {
+    <script src="~/js/reports.js" asp-append-version="true"></script>
+}

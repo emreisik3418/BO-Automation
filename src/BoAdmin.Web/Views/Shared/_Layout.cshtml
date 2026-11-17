@@ -1,0 +1,63 @@
+@inject ICurrentUser CurrentUser
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@(ViewData["Title"] is string title ? title + " - " : "")BO Yönetim</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+    <header class="sticky-top shadow-sm">
+        <nav class="navbar navbar-dark bg-primary">
+            <div class="container-fluid">
+                <a class="navbar-brand fw-semibold" asp-controller="Home" asp-action="Index">BO Yönetim</a>
+                @if (CurrentUser.IsAuthenticated)
+                {
+                    <span class="navbar-text text-white small">
+                        @CurrentUser.DisplayName
+                        <span class="opacity-75">(@CurrentUser.Sicil)</span>
+                    </span>
+                }
+            </div>
+        </nav>
+
+        @if (CurrentUser.IsAuthenticated)
+        {
+            <div class="bg-white border-bottom">
+                <div class="container-fluid">
+                    @await Component.InvokeAsync("ModuleTabs")
+                </div>
+            </div>
+        }
+    </header>
+
+    <main class="container-fluid py-3">
+        @if (TempData["Success"] is string successMessage)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                @successMessage
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Kapat"></button>
+            </div>
+        }
+        @if (TempData["Warning"] is string warningMessage)
+        {
+            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                @warningMessage
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Kapat"></button>
+            </div>
+        }
+
+        @RenderBody()
+    </main>
+
+    <footer class="border-top text-muted small py-2 bg-white">
+        <div class="container-fluid">BO Yönetim &middot; SAP BusinessObjects 4.3</div>
+    </footer>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

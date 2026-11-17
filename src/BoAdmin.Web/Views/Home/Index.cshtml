@@ -1,0 +1,47 @@
+@model HomeViewModel
+@{
+    ViewData["Title"] = "Ana Sayfa";
+}
+
+<div class="row justify-content-center">
+    <div class="col-xl-8 col-lg-10">
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <h1 class="h4 mb-3">Hoş geldiniz, @Model.DisplayName</h1>
+                <dl class="row mb-0">
+                    <dt class="col-sm-3">Sicil</dt>
+                    <dd class="col-sm-9">@Model.Sicil</dd>
+                    <dt class="col-sm-3">Hesap</dt>
+                    <dd class="col-sm-9 mb-0">@Model.UserName</dd>
+                </dl>
+            </div>
+        </div>
+
+        <h2 class="h5 mb-3">Erişebildiğiniz modüller</h2>
+        <div class="row g-3">
+            @foreach (var module in Model.Modules)
+            {
+                <div class="col-md-6">
+                    <div class="card h-100 shadow-sm @(module.IsAvailable ? "" : "opacity-50")">
+                        <div class="card-body d-flex flex-column">
+                            <h3 class="h6">
+                                @module.Title
+                                @if (!module.IsAvailable)
+                                {
+                                    <span class="badge text-bg-secondary ms-1">Yakında</span>
+                                }
+                            </h3>
+                            <p class="text-muted small flex-grow-1">@module.Description</p>
+                            @if (module.IsAvailable)
+                            {
+                                <div>
+                                    <a class="btn btn-primary btn-sm" asp-controller="@module.Controller" asp-action="@module.Action">Aç</a>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>

@@ -1,0 +1,33 @@
+@inject ICurrentUser CurrentUser
+@{
+    ViewData["Title"] = "Erişim Reddedildi";
+}
+
+<div class="row justify-content-center">
+    <div class="col-lg-7">
+        <div class="card border-warning shadow-sm">
+            <div class="card-body">
+                <h1 class="h4">Erişim Reddedildi</h1>
+                <p>Bu sayfaya erişim yetkiniz bulunmuyor.</p>
+
+                @if (CurrentUser.IsAuthenticated)
+                {
+                    <dl class="row small mb-3">
+                        <dt class="col-sm-3">Kullanıcı</dt>
+                        <dd class="col-sm-9">@CurrentUser.DisplayName</dd>
+                        <dt class="col-sm-3">Sicil</dt>
+                        <dd class="col-sm-9">@CurrentUser.Sicil</dd>
+                        <dt class="col-sm-3">Hesap</dt>
+                        <dd class="col-sm-9">@CurrentUser.UserName</dd>
+                    </dl>
+                }
+
+                <p class="text-muted small">
+                    Yetki talebi için sicil numaranızla sistem yöneticinize başvurun.
+                </p>
+
+                <a class="btn btn-outline-secondary btn-sm" href="javascript:history.back()">Geri dön</a>
+            </div>
+        </div>
+    </div>
+</div>

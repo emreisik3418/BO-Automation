@@ -51,5 +51,5 @@ Bağımlılık yönü: `Web → Application ← Infrastructure` (Web, compositio
 - [x] Parça 3: BO oturum servisi + REST client
 - [x] Parça 4: Rapor gateway + rapor servisi
 - [x] Parça 5: Audit log - dosya tabanlı (+ hata filtresi, view konumları)
-- [ ] Parça 6: Controller'lar + view'lar + layout
+- [x] Parça 6: Controller'lar + view'lar + layout
 - [ ] Parça 7: IIS kurulumu (`web.config`, adımlar)

@@ -1,0 +1,11 @@
+@model string
+@* Rapor İşlemleri alt menüsü. Model: "Search" veya "History" *@
+
+<ul class="nav nav-pills mb-3">
+    <li class="nav-item">
+        <a class="nav-link @(Model == "Search" ? "active" : "")" asp-controller="Reports" asp-action="Index">Rapor Arama</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(Model == "History" ? "active" : "")" asp-controller="Reports" asp-action="History">İşlem Geçmişi</a>
+    </li>
+</ul>

@@ -1,0 +1,54 @@
+@model DeleteResultViewModel
+@{
+    ViewData["Title"] = "İşlem Sonucu";
+    var operationText = Model.MoveToArchive ? "Arşive taşıma" : "Silme";
+}
+
+<partial name="_ReportsNav" model="@("Search")" />
+
+<h1 class="h5 mb-3">@operationText sonucu</h1>
+
+<div class="d-flex flex-wrap gap-2 mb-3">
+    <div class="alert alert-success py-2 mb-0">Başarılı: <strong>@Model.SuccessCount</strong></div>
+    <div class="alert @(Model.FailCount > 0 ? "alert-danger" : "alert-light border") py-2 mb-0">Başarısız: <strong>@Model.FailCount</strong></div>
+</div>
+
+<div class="table-responsive bg-white border rounded mb-3">
+    <table class="table table-sm align-middle mb-0">
+        <thead class="table-light">
+            <tr>
+                <th>Sonuç</th>
+                <th>Rapor adı</th>
+                <th>Klasör</th>
+                <th>Mesaj</th>
+                <th>ID</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var r in Model.Results)
+            {
+                <tr class="@(r.Success ? "" : "table-danger")">
+                    <td>
+                        @if (r.Success)
+                        {
+                            <span class="badge text-bg-success">Başarılı</span>
+                        }
+                        else
+                        {
+                            <span class="badge text-bg-danger">Başarısız</span>
+                        }
+                    </td>
+                    <td>@r.ReportName</td>
+                    <td class="small text-muted">@r.FolderPath</td>
+                    <td class="small">@r.Message</td>
+                    <td class="small text-muted">@r.ReportId</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<div class="d-flex gap-2">
+    <a asp-action="Index" class="btn btn-primary btn-sm">Rapor aramaya dön</a>
+    <a asp-action="History" class="btn btn-outline-secondary btn-sm">İşlem geçmişi</a>
+</div>

@@ -1,0 +1,20 @@
+@model IReadOnlyList<BoAdmin.Web.ViewComponents.ModuleTab>
+
+<ul class="nav nav-tabs module-tabs border-0 pt-2">
+    @foreach (var tab in Model)
+    {
+        <li class="nav-item">
+            @if (tab.IsEnabled)
+            {
+                <a class="nav-link @(tab.IsActive ? "active" : "")"
+                   asp-controller="@tab.Module.Controller" asp-action="@tab.Module.Action">@tab.Module.Title</a>
+            }
+            else
+            {
+                <span class="nav-link disabled" title="Bu modül henüz hazır değil">
+                    @tab.Module.Title <span class="badge text-bg-secondary ms-1">Yakında</span>
+                </span>
+            }
+        </li>
+    }
+</ul>
