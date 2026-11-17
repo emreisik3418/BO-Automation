@@ -9,7 +9,7 @@ ASP.NET Core MVC (.NET 8), Windows Authentication, BI Platform RESTful Web Servi
 src/
 ├─ BoAdmin.Web/             # MVC: Controller, View, yetkilendirme, layout
 ├─ BoAdmin.Application/     # Servisler, DTO'lar, arayüzler (BO'dan bağımsız)
-└─ BoAdmin.Infrastructure/  # BO REST client, oturum yönetimi, audit log (EF Core)
+└─ BoAdmin.Infrastructure/  # BO REST client, oturum yönetimi, audit log (dosya)
 ```
 
 Bağımlılık yönü: `Web → Application ← Infrastructure` (Web, composition root olarak Infrastructure'ı da referanslar).
