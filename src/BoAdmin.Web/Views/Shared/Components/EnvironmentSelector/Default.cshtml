@@ -1,0 +1,31 @@
+@model BoAdmin.Web.ViewComponents.EnvironmentSelectorModel
+
+@if (Model.Accessible.Count == 0)
+{
+    return;
+}
+
+<div class="dropdown">
+    <button class="btn btn-sm btn-@Model.Current.Color dropdown-toggle fw-semibold border border-light"
+            type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Aktif BO ortamı">
+        Ortam: @Model.Current.DisplayName
+    </button>
+
+    <ul class="dropdown-menu dropdown-menu-end">
+        <li><h6 class="dropdown-header">BO ortamı seçin</h6></li>
+        @foreach (var env in Model.Accessible)
+        {
+            var isCurrent = string.Equals(env.Key, Model.Current.Key, StringComparison.OrdinalIgnoreCase);
+            <li>
+                <form method="post" asp-controller="Environment" asp-action="Select" class="m-0">
+                    <input type="hidden" name="key" value="@env.Key" />
+                    <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
+                    <button type="submit" class="dropdown-item d-flex align-items-center gap-2 @(isCurrent ? "active" : "")">
+                        <span class="badge text-bg-@env.Color">@env.Key</span>
+                        @env.DisplayName
+                    </button>
+                </form>
+            </li>
+        }
+    </ul>
+</div>

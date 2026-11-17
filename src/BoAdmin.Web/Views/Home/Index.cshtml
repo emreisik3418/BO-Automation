@@ -12,12 +12,18 @@
                     <dt class="col-sm-3">Sicil</dt>
                     <dd class="col-sm-9">@Model.Sicil</dd>
                     <dt class="col-sm-3">Hesap</dt>
-                    <dd class="col-sm-9 mb-0">@Model.UserName</dd>
+                    <dd class="col-sm-9">@Model.UserName</dd>
+                    <dt class="col-sm-3">Aktif ortam</dt>
+                    <dd class="col-sm-9">@Model.CurrentEnvironment</dd>
+                    <dt class="col-sm-3">Yetkili ortamlar</dt>
+                    <dd class="col-sm-9 mb-0">@string.Join(", ", Model.AccessibleEnvironments)
+                        <div class="small text-muted">Ortamı sağ üstteki "Ortam" menüsünden değiştirebilirsiniz.</div>
+                    </dd>
                 </dl>
             </div>
         </div>
 
-        <h2 class="h5 mb-3">Erişebildiğiniz modüller</h2>
+        <h2 class="h5 mb-3">@Model.CurrentEnvironment ortamında erişebildiğiniz modüller</h2>
         <div class="row g-3">
             @foreach (var module in Model.Modules)
             {

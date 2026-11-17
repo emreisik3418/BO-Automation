@@ -15,6 +15,9 @@ public sealed class AuditEntry
 
     public string? DisplayName { get; set; }
 
+    /// <summary>BO ortamı: TEST, PROD ...</summary>
+    public string? Environment { get; set; }
+
     /// <summary>Reports, Users, Groups</summary>
     public string Module { get; set; } = string.Empty;
 
@@ -24,6 +27,7 @@ public sealed class AuditEntry
     public int? ObjectId { get; set; }
     public string? ObjectName { get; set; }
     public string? ObjectKind { get; set; }
+    public string? ObjectCuid { get; set; }
     public string? FolderPath { get; set; }
 
     /// <summary>Taşıma işlemlerinde hedef klasör yolu</summary>
@@ -42,6 +46,7 @@ public sealed class AuditEntry
 /// <summary>İşlem Geçmişi filtreleri.</summary>
 public sealed class AuditQuery
 {
+    public string? Environment { get; set; }
     public string? Module { get; set; }
     public string? UserContains { get; set; }
     public string? ObjectContains { get; set; }

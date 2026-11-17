@@ -4,11 +4,14 @@ using Microsoft.Extensions.Logging;
 namespace BoAdmin.Infrastructure.Bo;
 
 /// <summary>
-/// BoRestClient'ın her isteğine X-SAP-LogonToken ekler.
+/// BoRestClient'ın her isteğine, isteğin ait olduğu ortamın X-SAP-LogonToken'ını ekler.
+/// Ortam, BoRestClient tarafından request.Options içine yazılır.
 /// 401 gelirse token'ı düşürür, yeniden logon olur ve isteği BİR KEZ tekrarlar.
 /// </summary>
 public sealed class BoLogonTokenHandler : DelegatingHandler
 {
+    public static readonly HttpRequestOptionsKey<string> EnvironmentKey = new("BoEnvironment");
+
     private readonly IBoSessionService _session;
     private readonly ILogger<BoLogonTokenHandler> _logger;
 
@@ -20,23 +23,26 @@ public sealed class BoLogonTokenHandler : DelegatingHandler
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
-        var token = await _session.GetTokenAsync(ct);
+        if (!request.Options.TryGetValue(EnvironmentKey, out var environment) || string.IsNullOrEmpty(environment))
+            throw new InvalidOperationException("BO isteğinde ortam bilgisi yok.");
+
+        var token = await _session.GetTokenAsync(environment, ct);
         SetToken(request, token);
 
         var response = await base.SendAsync(request, ct);
         if (response.StatusCode != HttpStatusCode.Unauthorized)
             return response;
 
-        _logger.LogInformation("BO 401 döndü ({Method} {Uri}); oturum yenilenip istek tekrarlanıyor.",
-            request.Method, request.RequestUri);
+        _logger.LogInformation("BO 401 döndü ({Environment} {Method} {Uri}); oturum yenilenip istek tekrarlanıyor.",
+            environment, request.Method, request.RequestUri);
 
         response.Dispose();
-        _session.Invalidate(token);
+        _session.Invalidate(environment, token);
 
-        token = await _session.GetTokenAsync(ct);
+        token = await _session.GetTokenAsync(environment, ct);
         SetToken(request, token);
 
-        // Gövde StringContent/JsonContent olduğu için yeniden gönderilebilir
+        // Gövde JsonContent olduğu için yeniden gönderilebilir
         return await base.SendAsync(request, ct);
     }
 

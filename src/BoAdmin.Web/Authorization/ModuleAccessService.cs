@@ -1,43 +1,51 @@
 using System.Security.Claims;
+using BoAdmin.Web.Infrastructure;
 using Microsoft.Extensions.Options;
 
 namespace BoAdmin.Web.Authorization;
 
 /// <summary>
-/// Kullanıcının hangi modüllere erişebildiğini hesaplar.
-/// Hem authorization handler hem de menü/sekme gösterimi bu servisi kullanır,
+/// Kullanıcının hangi ortamda hangi modüllere erişebildiğini hesaplar.
+/// Hem authorization handler hem de menü/sekme/ortam seçici bu servisi kullanır,
 /// böylece "menüde görünen" ile "erişilebilen" her zaman aynıdır.
 /// </summary>
 public interface IModuleAccessService
 {
-    bool HasAccess(ClaimsPrincipal user, string moduleName);
-    IReadOnlyList<string> GetAccessibleModules(ClaimsPrincipal user);
+    bool HasAccess(ClaimsPrincipal user, string environment, string moduleName);
+
+    IReadOnlyList<string> GetAccessibleModules(ClaimsPrincipal user, string environment);
+
+    /// <summary>En az bir modüle erişimi olan ortamlar (menüdeki sırayla).</summary>
+    IReadOnlyList<EnvironmentInfo> GetAccessibleEnvironments(ClaimsPrincipal user);
 }
 
 public sealed class ModuleAccessService : IModuleAccessService
 {
     private readonly IOptionsMonitor<ModuleAuthorizationOptions> _options;
+    private readonly EnvironmentCatalog _catalog;
     private readonly ILogger<ModuleAccessService> _logger;
 
     public ModuleAccessService(
         IOptionsMonitor<ModuleAuthorizationOptions> options,
+        EnvironmentCatalog catalog,
         ILogger<ModuleAccessService> logger)
     {
         _options = options;
+        _catalog = catalog;
         _logger = logger;
     }
 
-    public bool HasAccess(ClaimsPrincipal user, string moduleName)
+    public bool HasAccess(ClaimsPrincipal user, string environment, string moduleName)
     {
-        if (user.Identity?.IsAuthenticated != true) return false;
+        if (user.Identity?.IsAuthenticated != true || string.IsNullOrEmpty(environment)) return false;
 
         if (string.Equals(moduleName, ModuleNames.AnyModule, StringComparison.OrdinalIgnoreCase))
-            return ModuleNames.All.Any(m => HasAccess(user, m));
+            return ModuleNames.All.Any(m => HasAccess(user, environment, m));
 
-        var rule = _options.CurrentValue.GetRule(moduleName);
+        var rule = _options.CurrentValue.GetRule(environment, moduleName);
         if (rule is null)
         {
-            _logger.LogDebug("'{Module}' modülü için yetki tanımı yok, erişim reddedildi.", moduleName);
+            _logger.LogDebug("{Environment}/{Module} için yetki tanımı yok, erişim reddedildi.", environment, moduleName);
             return false;
         }
 
@@ -46,7 +54,7 @@ public sealed class ModuleAccessService : IModuleAccessService
         // 1) Sicil kontrolü
         if (IsUserAllowed(identityName, rule.AllowedUsers))
         {
-            _logger.LogDebug("{User} -> {Module}: sicil listesi ile yetkili.", identityName, moduleName);
+            _logger.LogDebug("{User} -> {Environment}/{Module}: sicil listesi ile yetkili.", identityName, environment, moduleName);
             return true;
         }
 
@@ -54,15 +62,18 @@ public sealed class ModuleAccessService : IModuleAccessService
         var matchedGroup = FindMatchingGroup(user, identityName, rule.AllowedGroups);
         if (matchedGroup is not null)
         {
-            _logger.LogDebug("{User} -> {Module}: '{Group}' grubu ile yetkili.", identityName, moduleName, matchedGroup);
+            _logger.LogDebug("{User} -> {Environment}/{Module}: '{Group}' grubu ile yetkili.", identityName, environment, moduleName, matchedGroup);
             return true;
         }
 
         return false;
     }
 
-    public IReadOnlyList<string> GetAccessibleModules(ClaimsPrincipal user) =>
-        ModuleNames.All.Where(m => HasAccess(user, m)).ToList();
+    public IReadOnlyList<string> GetAccessibleModules(ClaimsPrincipal user, string environment) =>
+        ModuleNames.All.Where(m => HasAccess(user, environment, m)).ToList();
+
+    public IReadOnlyList<EnvironmentInfo> GetAccessibleEnvironments(ClaimsPrincipal user) =>
+        _catalog.All.Where(e => HasAccess(user, e.Key, ModuleNames.AnyModule)).ToList();
 
     private static bool IsUserAllowed(string identityName, IEnumerable<string> allowedUsers)
     {
@@ -99,8 +110,7 @@ public sealed class ModuleAccessService : IModuleAccessService
 
             try
             {
-                // WindowsPrincipal.IsInRole iç içe (nested) grupları da kapsar,
-                // çünkü Windows token'ı kullanıcının tüm grup SID'lerini içerir.
+                // WindowsPrincipal.IsInRole iç içe (nested) grupları da kapsar
                 if (user.IsInRole(group)) return group;
             }
             catch (Exception ex)

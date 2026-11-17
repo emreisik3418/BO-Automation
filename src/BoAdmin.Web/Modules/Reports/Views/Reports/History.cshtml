@@ -3,6 +3,8 @@
     ViewData["Title"] = "İşlem Geçmişi";
     var q = Model.Query;
     var result = Model.Result;
+    var environments = (IReadOnlyList<BoAdmin.Web.Infrastructure.EnvironmentInfo>)(ViewBag.Environments
+        ?? Array.Empty<BoAdmin.Web.Infrastructure.EnvironmentInfo>());
 }
 
 <partial name="_ReportsNav" model="@("History")" />
@@ -10,13 +12,19 @@
 @* ---------------- Filtreler ---------------- *@
 <form method="get" asp-action="History" class="card card-body shadow-sm mb-3">
     <div class="row g-2 align-items-end">
-        <div class="col-lg-3 col-md-6">
+        <div class="col-lg-2 col-md-4">
+            <label asp-for="Query.Environment" class="form-label small mb-1">Ortam</label>
+            <select asp-for="Query.Environment" class="form-select form-select-sm"
+                    asp-items="@(new SelectList(environments, nameof(BoAdmin.Web.Infrastructure.EnvironmentInfo.Key), nameof(BoAdmin.Web.Infrastructure.EnvironmentInfo.DisplayName)))">
+            </select>
+        </div>
+        <div class="col-lg-2 col-md-4">
             <label asp-for="Query.UserContains" class="form-label small mb-1">Kullanıcı</label>
             <input asp-for="Query.UserContains" class="form-control form-control-sm" placeholder="sicil veya ad..." />
         </div>
-        <div class="col-lg-3 col-md-6">
+        <div class="col-lg-2 col-md-4">
             <label asp-for="Query.ObjectContains" class="form-label small mb-1">Rapor</label>
-            <input asp-for="Query.ObjectContains" class="form-control form-control-sm" placeholder="ad, ID veya klasör..." />
+            <input asp-for="Query.ObjectContains" class="form-control form-control-sm" placeholder="ad, ID, CUID, klasör..." />
         </div>
         <div class="col-lg-2 col-md-4">
             <label asp-for="Query.Operation" class="form-label small mb-1">İşlem</label>
@@ -36,7 +44,7 @@
                 <option value="False">Başarısız</option>
             </select>
         </div>
-        <div class="col-lg-3 col-md-4">
+        <div class="col-lg-3 col-md-6">
             <label class="form-label small mb-1">Tarih aralığı</label>
             <div class="input-group input-group-sm">
                 <input asp-for="Query.From" type="date" asp-format="{0:yyyy-MM-dd}" class="form-control" title="Başlangıç" />
@@ -103,6 +111,10 @@
                         <td>
                             @e.ObjectName
                             <div class="small text-muted">ID: @e.ObjectId @(e.ObjectKind is null ? "" : "· " + ReportKinds.GetDisplayName(e.ObjectKind))</div>
+                            @if (!string.IsNullOrEmpty(e.ObjectCuid))
+                            {
+                                <div class="small text-muted font-monospace">@e.ObjectCuid</div>
+                            }
                         </td>
                         <td class="small text-muted">
                             @e.FolderPath

@@ -1,14 +1,17 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using BoAdmin.Application.Common;
 using BoAdmin.Application.Common.Exceptions;
 using BoAdmin.Infrastructure.Bo.Models;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace BoAdmin.Infrastructure.Bo;
 
 /// <summary>
-/// /biprws için typed HttpClient. Token ekleme ve 401 yenilemesi BoLogonTokenHandler'dadır.
+/// /biprws için typed HttpClient. İstekler kullanıcının seçtiği ortama (ICurrentEnvironment) gider.
+/// Token ekleme ve 401 yenilemesi BoLogonTokenHandler'dadır.
 /// Tüm hatalar BoException türlerine çevrilir; üst katmanlar HttpClient ayrıntısı görmez.
 /// Yollar başında "/" olmadan verilir: "v1/cmsquery", "v1/infoobjects/123".
 /// </summary>
@@ -17,13 +20,24 @@ public sealed class BoRestClient
     private const int MaxLoggedBodyLength = 4000;
 
     private readonly HttpClient _http;
+    private readonly ICurrentEnvironment _environment;
+    private readonly IOptionsMonitor<BoOptions> _options;
     private readonly ILogger<BoRestClient> _logger;
 
-    public BoRestClient(HttpClient http, ILogger<BoRestClient> logger)
+    public BoRestClient(
+        HttpClient http,
+        ICurrentEnvironment environment,
+        IOptionsMonitor<BoOptions> options,
+        ILogger<BoRestClient> logger)
     {
         _http = http;
+        _environment = environment;
+        _options = options;
         _logger = logger;
     }
+
+    /// <summary>İsteklerin gideceği ortam anahtarı.</summary>
+    public string EnvironmentKey => _environment.Key;
 
     // ------------------------------------------------------------------
     // CMS sorgusu
@@ -104,7 +118,12 @@ public sealed class BoRestClient
 
     private async Task<JsonElement> SendForJsonAsync(HttpMethod method, string path, object? body, CancellationToken ct)
     {
-        using var request = new HttpRequestMessage(method, path);
+        var environment = _environment.Key;
+        var env = _options.CurrentValue.Find(environment)
+            ?? throw new BoUnavailableException($"'{environment}' ortamı yapılandırmada tanımlı değil.");
+
+        using var request = new HttpRequestMessage(method, BoUrl.Combine(env.BaseUrl, path));
+        request.Options.Set(BoLogonTokenHandler.EnvironmentKey, environment);
         if (body is not null)
             request.Content = JsonContent.Create(body, body.GetType());
 
@@ -115,11 +134,11 @@ public sealed class BoRestClient
         }
         catch (HttpRequestException ex)
         {
-            throw new BoUnavailableException($"BO isteği gönderilemedi: {method} {path}", ex);
+            throw new BoUnavailableException($"BO isteği gönderilemedi ({environment}): {method} {path}", ex);
         }
         catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
         {
-            throw new BoUnavailableException($"BO isteği zaman aşımına uğradı: {method} {path}", ex);
+            throw new BoUnavailableException($"BO isteği zaman aşımına uğradı ({environment}): {method} {path}", ex);
         }
 
         using (response)

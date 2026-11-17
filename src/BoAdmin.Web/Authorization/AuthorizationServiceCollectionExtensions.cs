@@ -1,3 +1,5 @@
+using BoAdmin.Application.Common;
+using BoAdmin.Web.Infrastructure;
 using Microsoft.AspNetCore.Authorization;
 
 namespace BoAdmin.Web.Authorization;
@@ -5,18 +7,26 @@ namespace BoAdmin.Web.Authorization;
 public static class AuthorizationServiceCollectionExtensions
 {
     /// <summary>
-    /// Modül bazlı yetkilendirmeyi kaydeder:
-    ///  - Her modül için aynı adlı policy (Reports, Users, Groups)
+    /// Ortam + modül bazlı yetkilendirmeyi kaydeder:
+    ///  - Her modül için aynı adlı policy (Reports, Users, Groups), seçili ortama göre değerlendirilir
     ///  - "AnyModule" policy'si (karşılama ekranı)
     ///  - Fallback: [Authorize] yazılmayan her yer için kimliği doğrulanmış kullanıcı şartı
+    ///  - Seçili ortam (ICurrentEnvironment, cookie)
     /// </summary>
     public static IServiceCollection AddModuleAuthorization(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<ModuleAuthorizationOptions>(configuration.GetSection(ModuleAuthorizationOptions.SectionName));
 
         services.AddMemoryCache(); // kullanıcı bilgisi (AD görünen ad) önbelleği
+        services.AddSingleton<EnvironmentCatalog>();
         services.AddSingleton<IModuleAccessService, ModuleAccessService>();
-        services.AddSingleton<IAuthorizationHandler, ModuleAuthorizationHandler>();
+
+        // Seçili ortam istek bazında çözülür
+        services.AddScoped<CurrentEnvironmentAccessor>();
+        services.AddScoped<ICurrentEnvironment>(sp => sp.GetRequiredService<CurrentEnvironmentAccessor>());
+
+        // Handler seçili ortamı kullandığı için scoped
+        services.AddScoped<IAuthorizationHandler, ModuleAuthorizationHandler>();
 
         services.AddAuthorization(options =>
         {

@@ -20,27 +20,41 @@ public interface IReportService
     /// Her rapor için audit kaydı yazılır.
     /// </summary>
     Task<IReadOnlyList<DeleteItemResult>> DeleteAsync(IReadOnlyCollection<int> reportIds, DeleteOptions options);
+
+    /// <summary>TXT içeriğindeki CUID'leri çözer, hedef klasörü doğrular ve önizleme döndürür.</summary>
+    Task<BulkBackupPreviewDto> PrepareBulkBackupAsync(string fileContent, int targetFolderId, CancellationToken ct = default);
+
+    /// <summary>Raporları yedek klasörüne taşır (orijinal konumdan kalkar). Her rapor ayrı işlenir ve audit'e yazılır.</summary>
+    Task<IReadOnlyList<DeleteItemResult>> ExecuteBulkBackupAsync(IReadOnlyCollection<int> reportIds, int targetFolderId, int confirmationCount);
 }
 
 public sealed class ReportService : IReportService
 {
     public const string ModuleName = "Reports";
+
+    /// <summary>Rapor arama ekranından tek seferde işlenebilecek rapor sayısı.</summary>
     public const int MaxBatchSize = 200;
+
+    /// <summary>TXT ile toplu işlemde tek seferde işlenebilecek rapor sayısı.</summary>
+    public const int MaxBulkSize = 500;
 
     private readonly IBoReportGateway _gateway;
     private readonly IAuditLogService _audit;
     private readonly ICurrentUser _currentUser;
+    private readonly ICurrentEnvironment _environment;
     private readonly ILogger<ReportService> _logger;
 
     public ReportService(
         IBoReportGateway gateway,
         IAuditLogService audit,
         ICurrentUser currentUser,
+        ICurrentEnvironment environment,
         ILogger<ReportService> logger)
     {
         _gateway = gateway;
         _audit = audit;
         _currentUser = currentUser;
+        _environment = environment;
         _logger = logger;
     }
 
@@ -72,55 +86,98 @@ public sealed class ReportService : IReportService
         _gateway.GetFoldersAsync(ct);
 
     // ------------------------------------------------------------------
-    // Silme önizleme
+    // Silme (arama ekranından)
     // ------------------------------------------------------------------
 
     public async Task<DeletePreviewDto> PrepareDeleteAsync(IReadOnlyCollection<int> reportIds, CancellationToken ct = default)
     {
-        var ids = ValidateIds(reportIds);
+        var ids = ValidateIds(reportIds, MaxBatchSize);
 
         var reports = await _gateway.GetReportsByIdsAsync(ids, ct);
-        var counts = await _gateway.GetInstanceCountsAsync(reports.Select(r => r.Id).ToList(), ct);
+        var items = await WithInstanceCountsAsync(reports, ct);
         var archive = await _gateway.GetArchiveFolderAsync(ct);
-
-        var items = reports
-            .OrderBy(r => r.FolderPath).ThenBy(r => r.Name)
-            .Select(r => new DeletePreviewItemDto(r, counts.TryGetValue(r.Id, out var c) ? c : 0))
-            .ToList();
-
         var notFound = ids.Except(reports.Select(r => r.Id)).ToList();
 
         return new DeletePreviewDto(items, notFound, archive);
     }
 
-    // ------------------------------------------------------------------
-    // Silme / arşive taşıma
-    // ------------------------------------------------------------------
-
     public async Task<IReadOnlyList<DeleteItemResult>> DeleteAsync(IReadOnlyCollection<int> reportIds, DeleteOptions options)
     {
-        var ids = ValidateIds(reportIds);
-
-        if (options.ConfirmationCount != ids.Count)
-            throw new AppValidationException(
-                $"Onay için yazılan sayı ({options.ConfirmationCount}) seçili rapor sayısıyla ({ids.Count}) eşleşmiyor.");
-
-        // Toplu işlem kullanıcı tarayıcıyı kapatsa bile yarıda kalmasın diye
-        // istek iptal token'ı kullanılmaz.
-        var ct = CancellationToken.None;
+        var ids = ValidateIds(reportIds, MaxBatchSize);
+        ValidateConfirmation(options.ConfirmationCount, ids.Count);
 
         FolderDto? archive = null;
         if (options.MoveToArchive)
         {
-            archive = await _gateway.GetArchiveFolderAsync(ct)
-                ?? throw new AppValidationException("Arşiv klasörü tanımlı değil (SapBo:ArchiveFolderId).");
+            archive = await _gateway.GetArchiveFolderAsync(CancellationToken.None)
+                ?? throw new AppValidationException($"{_environment.DisplayName} ortamında arşiv klasörü tanımlı değil (ArchiveFolderId).");
         }
 
-        var batchId = Guid.NewGuid();
         var operation = options.MoveToArchive ? ReportOperation.Archive : ReportOperation.Delete;
+        return await RunBatchAsync(ids, operation, options.DeleteInstances, archive);
+    }
 
-        _logger.LogInformation("Toplu işlem başladı. Batch: {BatchId}, Kullanıcı: {User}, İşlem: {Operation}, Rapor: {Count}, Instance sil: {Inst}",
-            batchId, _currentUser.UserName, operation, ids.Count, options.DeleteInstances);
+    // ------------------------------------------------------------------
+    // TXT ile toplu yedekleme (yedek klasörüne taşıma)
+    // ------------------------------------------------------------------
+
+    public async Task<BulkBackupPreviewDto> PrepareBulkBackupAsync(string fileContent, int targetFolderId, CancellationToken ct = default)
+    {
+        var parsed = CuidListParser.Parse(fileContent ?? string.Empty);
+
+        if (parsed.Cuids.Count == 0)
+            throw new AppValidationException("Dosyada geçerli CUID bulunamadı. Her satıra bir CUID yazılmalı.");
+
+        if (parsed.Cuids.Count > MaxBulkSize)
+            throw new AppValidationException(
+                $"Tek seferde en fazla {MaxBulkSize} CUID işlenebilir. Dosyada: {parsed.Cuids.Count}. Lütfen dosyayı bölün.");
+
+        var folder = await GetTargetFolderAsync(targetFolderId, ct);
+
+        var reports = await _gateway.GetReportsByCuidsAsync(parsed.Cuids, ct);
+        var items = await WithInstanceCountsAsync(reports, ct);
+
+        var foundCuids = new HashSet<string>(reports.Select(r => r.Cuid ?? string.Empty), StringComparer.Ordinal);
+        var notFound = parsed.Cuids.Where(c => !foundCuids.Contains(c)).ToList();
+
+        return new BulkBackupPreviewDto(items, notFound, parsed.InvalidEntries, parsed.DuplicateCount, folder);
+    }
+
+    public async Task<IReadOnlyList<DeleteItemResult>> ExecuteBulkBackupAsync(
+        IReadOnlyCollection<int> reportIds, int targetFolderId, int confirmationCount)
+    {
+        var ids = ValidateIds(reportIds, MaxBulkSize);
+        ValidateConfirmation(confirmationCount, ids.Count);
+
+        var folder = await GetTargetFolderAsync(targetFolderId, CancellationToken.None);
+        return await RunBatchAsync(ids, ReportOperation.BackupMove, deleteInstances: false, folder);
+    }
+
+    private async Task<FolderDto> GetTargetFolderAsync(int targetFolderId, CancellationToken ct)
+    {
+        if (targetFolderId <= 0)
+            throw new AppValidationException("Lütfen geçerli bir yedek klasör ID'si girin.");
+
+        return await _gateway.GetFolderAsync(targetFolderId, ct)
+            ?? throw new AppValidationException(
+                $"{targetFolderId} ID'li klasör {_environment.DisplayName} ortamında bulunamadı.");
+    }
+
+    // ------------------------------------------------------------------
+    // Ortak toplu işlem
+    // ------------------------------------------------------------------
+
+    private async Task<IReadOnlyList<DeleteItemResult>> RunBatchAsync(
+        List<int> ids, ReportOperation operation, bool deleteInstances, FolderDto? targetFolder)
+    {
+        // Toplu işlem kullanıcı tarayıcıyı kapatsa bile yarıda kalmasın diye
+        // istek iptal token'ı kullanılmaz.
+        var ct = CancellationToken.None;
+        var batchId = Guid.NewGuid();
+
+        _logger.LogInformation(
+            "Toplu işlem başladı. Batch: {BatchId}, Ortam: {Environment}, Kullanıcı: {User}, İşlem: {Operation}, Rapor: {Count}, Hedef: {Target}, Instance sil: {Inst}",
+            batchId, _environment.Key, _currentUser.UserName, operation, ids.Count, targetFolder?.Path, deleteInstances);
 
         // Güvenlik: yalnızca gerçekten rapor olan nesneleri işle (POST edilen ID'ye güvenme)
         var reports = (await _gateway.GetReportsByIdsAsync(ids, ct)).ToDictionary(r => r.Id);
@@ -131,7 +188,7 @@ public sealed class ReportService : IReportService
             DeleteItemResult result;
             if (reports.TryGetValue(id, out var report))
             {
-                result = await ProcessOneAsync(report, operation, options.DeleteInstances, archive, ct);
+                result = await ProcessOneAsync(report, operation, deleteInstances, targetFolder, ct);
             }
             else
             {
@@ -140,7 +197,7 @@ public sealed class ReportService : IReportService
             }
 
             results.Add(result);
-            await WriteAuditAsync(result, report?.Kind, archive, batchId);
+            await WriteAuditAsync(result, report, targetFolder, batchId);
         }
 
         _logger.LogInformation("Toplu işlem bitti. Batch: {BatchId}, Başarılı: {Ok}, Başarısız: {Fail}",
@@ -150,7 +207,7 @@ public sealed class ReportService : IReportService
     }
 
     private async Task<DeleteItemResult> ProcessOneAsync(
-        ReportListItemDto report, ReportOperation operation, bool deleteInstances, FolderDto? archive, CancellationToken ct)
+        ReportListItemDto report, ReportOperation operation, bool deleteInstances, FolderDto? targetFolder, CancellationToken ct)
     {
         int instancesDeleted = 0, instancesFailed = 0;
         string? firstInstanceError = null;
@@ -179,16 +236,18 @@ public sealed class ReportService : IReportService
 
             // 2) Rapor
             string message;
-            if (operation == ReportOperation.Archive)
+            if (operation is ReportOperation.Archive or ReportOperation.BackupMove)
             {
-                if (report.ParentFolderId == archive!.Id)
+                if (report.ParentFolderId == targetFolder!.Id)
                 {
                     return new DeleteItemResult(report.Id, report.Name, report.FolderPath, operation, false,
-                        "Rapor zaten arşiv klasöründe.", instancesDeleted, instancesFailed);
+                        "Rapor zaten hedef klasörde.", instancesDeleted, instancesFailed);
                 }
 
-                await _gateway.MoveToFolderAsync(report.Id, report.Kind, archive.Id, ct);
-                message = $"Arşiv klasörüne taşındı: {archive.Path}";
+                await _gateway.MoveToFolderAsync(report.Id, report.Kind, targetFolder.Id, ct);
+                message = operation == ReportOperation.BackupMove
+                    ? $"Yedek klasörüne taşındı: {targetFolder.Path}"
+                    : $"Arşiv klasörüne taşındı: {targetFolder.Path}";
             }
             else
             {
@@ -221,20 +280,24 @@ public sealed class ReportService : IReportService
         }
     }
 
-    private async Task WriteAuditAsync(DeleteItemResult result, string? kind, FolderDto? archive, Guid batchId)
+    private async Task WriteAuditAsync(DeleteItemResult result, ReportListItemDto? report, FolderDto? targetFolder, Guid batchId)
     {
+        var isMove = result.Operation is ReportOperation.Archive or ReportOperation.BackupMove;
+
         var entry = new AuditEntry
         {
             TimestampUtc = DateTime.UtcNow,
+            Environment = _environment.Key,
             UserName = _currentUser.UserName,
             DisplayName = _currentUser.DisplayName,
             Module = ModuleName,
             Operation = result.Operation.ToString(),
             ObjectId = result.ReportId,
             ObjectName = result.ReportName,
-            ObjectKind = kind,
+            ObjectKind = report?.Kind,
+            ObjectCuid = report?.Cuid,
             FolderPath = result.FolderPath,
-            TargetPath = result.Operation == ReportOperation.Archive ? archive?.Path : null,
+            TargetPath = isMove ? targetFolder?.Path : null,
             Success = result.Success,
             Message = result.Message,
             InstanceCount = result.InstancesDeleted > 0 ? result.InstancesDeleted : null,
@@ -246,17 +309,34 @@ public sealed class ReportService : IReportService
 
     // ------------------------------------------------------------------
 
-    private static List<int> ValidateIds(IReadOnlyCollection<int>? reportIds)
+    private async Task<List<DeletePreviewItemDto>> WithInstanceCountsAsync(IReadOnlyList<ReportListItemDto> reports, CancellationToken ct)
+    {
+        var counts = await _gateway.GetInstanceCountsAsync(reports.Select(r => r.Id).ToList(), ct);
+
+        return reports
+            .OrderBy(r => r.FolderPath).ThenBy(r => r.Name)
+            .Select(r => new DeletePreviewItemDto(r, counts.TryGetValue(r.Id, out var c) ? c : 0))
+            .ToList();
+    }
+
+    private static List<int> ValidateIds(IReadOnlyCollection<int>? reportIds, int max)
     {
         var ids = (reportIds ?? Array.Empty<int>()).Where(id => id > 0).Distinct().ToList();
 
         if (ids.Count == 0)
             throw new AppValidationException("Lütfen en az bir rapor seçin.");
 
-        if (ids.Count > MaxBatchSize)
-            throw new AppValidationException($"Tek seferde en fazla {MaxBatchSize} rapor işlenebilir. Seçili: {ids.Count}.");
+        if (ids.Count > max)
+            throw new AppValidationException($"Tek seferde en fazla {max} rapor işlenebilir. Seçili: {ids.Count}.");
 
         return ids;
+    }
+
+    private static void ValidateConfirmation(int confirmationCount, int expected)
+    {
+        if (confirmationCount != expected)
+            throw new AppValidationException(
+                $"Onay için yazılan sayı ({confirmationCount}) işlenecek rapor sayısıyla ({expected}) eşleşmiyor.");
     }
 
     private static string? Clean(string? value) =>

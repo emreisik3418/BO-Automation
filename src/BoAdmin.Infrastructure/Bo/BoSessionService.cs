@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net.Http.Json;
 using BoAdmin.Application.Common.Exceptions;
 using BoAdmin.Infrastructure.Bo.Models;
@@ -7,20 +8,20 @@ using Microsoft.Extensions.Options;
 namespace BoAdmin.Infrastructure.Bo;
 
 /// <summary>
-/// BO servis hesabı oturumunu yönetir:
-///  - POST /logon/long ile token alır ve önbellekte tutar
+/// Her BO ortamı için ayrı servis hesabı oturumu yönetir:
+///  - POST /logon/long ile token alır ve ortam bazında önbellekte tutar
 ///  - Süre dolunca (TokenLifetimeMinutes) otomatik yeniler, eski oturumu /logoff ile kapatır
 ///  - 401 alınınca Invalidate ile token düşürülür, bir sonraki istekte yeniden logon olunur
-///  - Uygulama kapanırken LogoffAsync çağrılır (BoLogoffHostedService)
+///  - Uygulama kapanırken tüm ortamlar için /logoff (BoLogoffHostedService)
 /// </summary>
 public interface IBoSessionService
 {
-    Task<string> GetTokenAsync(CancellationToken ct = default);
+    Task<string> GetTokenAsync(string environment, CancellationToken ct = default);
 
     /// <summary>Verilen token hâlâ geçerli token ise düşürür (eşzamanlı isteklerde çift logon'u önler).</summary>
-    void Invalidate(string token);
+    void Invalidate(string environment, string token);
 
-    Task LogoffAsync(CancellationToken ct = default);
+    Task LogoffAllAsync(CancellationToken ct = default);
 }
 
 public sealed class BoSessionService : IBoSessionService, IDisposable
@@ -31,10 +32,16 @@ public sealed class BoSessionService : IBoSessionService, IDisposable
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IOptionsMonitor<BoOptions> _options;
     private readonly ILogger<BoSessionService> _logger;
-    private readonly SemaphoreSlim _lock = new(1, 1);
+
+    private sealed class SessionSlot
+    {
+        public readonly SemaphoreSlim Lock = new(1, 1);
+        public SessionState? State; // Volatile/Interlocked ile erişilir
+    }
 
     private sealed record SessionState(string Token, DateTimeOffset ExpiresAt);
-    private SessionState? _state; // Volatile/Interlocked ile erişilir
+
+    private readonly ConcurrentDictionary<string, SessionSlot> _slots = new(StringComparer.OrdinalIgnoreCase);
 
     public BoSessionService(
         IHttpClientFactory httpClientFactory,
@@ -46,77 +53,99 @@ public sealed class BoSessionService : IBoSessionService, IDisposable
         _logger = logger;
     }
 
-    public async Task<string> GetTokenAsync(CancellationToken ct = default)
+    public async Task<string> GetTokenAsync(string environment, CancellationToken ct = default)
     {
-        var state = Volatile.Read(ref _state);
+        var slot = _slots.GetOrAdd(environment, _ => new SessionSlot());
+
+        var state = Volatile.Read(ref slot.State);
         if (state is not null && DateTimeOffset.UtcNow < state.ExpiresAt)
             return state.Token;
 
-        await _lock.WaitAsync(ct);
+        await slot.Lock.WaitAsync(ct);
         try
         {
             // Kilit beklerken başka bir istek yenilemiş olabilir
-            state = Volatile.Read(ref _state);
+            state = Volatile.Read(ref slot.State);
             if (state is not null && DateTimeOffset.UtcNow < state.ExpiresAt)
                 return state.Token;
 
             var oldToken = state?.Token;
 
-            var token = await LogonAsync(ct);
+            var token = await LogonAsync(environment, ct);
             var lifetime = TimeSpan.FromMinutes(Math.Max(1, _options.CurrentValue.TokenLifetimeMinutes));
-            Volatile.Write(ref _state, new SessionState(token, DateTimeOffset.UtcNow.Add(lifetime)));
+            Volatile.Write(ref slot.State, new SessionState(token, DateTimeOffset.UtcNow.Add(lifetime)));
 
-            _logger.LogInformation("BO oturumu açıldı. Geçerlilik: {Minutes} dk.", lifetime.TotalMinutes);
+            _logger.LogInformation("BO oturumu açıldı. Ortam: {Environment}, geçerlilik: {Minutes} dk.",
+                environment, lifetime.TotalMinutes);
 
             // Süresi dolan (ama hâlâ açık olabilecek) eski oturumu arka planda kapat.
             // BO'da açık kalan oturumlar eşzamanlı lisans tüketir.
             if (oldToken is not null)
-                _ = LogoffTokenSafeAsync(oldToken, CancellationToken.None);
+                _ = LogoffTokenSafeAsync(environment, oldToken, CancellationToken.None);
 
             return token;
         }
         finally
         {
-            _lock.Release();
+            slot.Lock.Release();
         }
     }
 
-    public void Invalidate(string token)
+    public void Invalidate(string environment, string token)
     {
-        var state = Volatile.Read(ref _state);
+        if (!_slots.TryGetValue(environment, out var slot)) return;
+
+        var state = Volatile.Read(ref slot.State);
         if (state is null || state.Token != token) return;
 
         // Yalnızca hâlâ aynı token duruyorsa düşür (başka istek yenilediyse dokunma)
-        if (ReferenceEquals(Interlocked.CompareExchange(ref _state, null, state), state))
-            _logger.LogWarning("BO token'ı geçersiz sayıldı (401). Bir sonraki istekte yeniden oturum açılacak.");
+        if (ReferenceEquals(Interlocked.CompareExchange(ref slot.State, null, state), state))
+            _logger.LogWarning("BO token'ı geçersiz sayıldı (401). Ortam: {Environment}. Bir sonraki istekte yeniden oturum açılacak.", environment);
     }
 
-    public async Task LogoffAsync(CancellationToken ct = default)
+    public async Task LogoffAllAsync(CancellationToken ct = default)
     {
-        var state = Interlocked.Exchange(ref _state, null);
-        if (state is null) return;
-
-        await LogoffTokenSafeAsync(state.Token, ct);
+        foreach (var (environment, slot) in _slots)
+        {
+            var state = Interlocked.Exchange(ref slot.State, null);
+            if (state is not null)
+                await LogoffTokenSafeAsync(environment, state.Token, ct);
+        }
     }
 
-    private async Task<string> LogonAsync(CancellationToken ct)
+    // ------------------------------------------------------------------
+
+    private BoEnvironmentOptions GetEnvironment(string environment) =>
+        _options.CurrentValue.Find(environment)
+        ?? throw new BoAuthenticationException($"'{environment}' ortamı yapılandırmada tanımlı değil.");
+
+    private async Task<string> LogonAsync(string environment, CancellationToken ct)
     {
-        var options = _options.CurrentValue;
+        var env = GetEnvironment(environment);
+
+        if (string.IsNullOrWhiteSpace(env.BaseUrl) || string.IsNullOrWhiteSpace(env.UserName))
+            throw new BoAuthenticationException($"'{environment}' ortamı için BaseUrl veya UserName tanımlı değil.");
+
+        if (string.IsNullOrWhiteSpace(env.Password))
+            throw new BoAuthenticationException(
+                $"'{environment}' ortamı için şifre tanımlı değil (SapBo:Environments:{environment}:Password).");
+
         var client = _httpClientFactory.CreateClient(HttpClientName);
-        var request = new BoLogonRequest(options.UserName, options.Password, options.AuthType);
+        var url = BoUrl.Combine(env.BaseUrl, "logon/long");
+        var request = new BoLogonRequest(env.UserName, env.Password, env.AuthType);
 
         HttpResponseMessage response;
         try
         {
-            response = await client.PostAsJsonAsync("logon/long", request, ct);
+            response = await client.PostAsJsonAsync(url, request, ct);
         }
         catch (HttpRequestException ex)
         {
-            throw new BoUnavailableException($"BO logon isteği gönderilemedi: {client.BaseAddress}", ex);
+            throw new BoUnavailableException($"BO logon isteği gönderilemedi ({environment}): {url}", ex);
         }
         catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
         {
-            throw new BoUnavailableException($"BO logon isteği zaman aşımına uğradı: {client.BaseAddress}", ex);
+            throw new BoUnavailableException($"BO logon isteği zaman aşımına uğradı ({environment}): {url}", ex);
         }
 
         using (response)
@@ -124,12 +153,12 @@ public sealed class BoSessionService : IBoSessionService, IDisposable
             if (!response.IsSuccessStatusCode)
             {
                 var (code, message) = await BoErrorParser.ReadAsync(response, ct);
-                _logger.LogError("BO logon başarısız. HTTP {Status}, Kod: {Code}, Mesaj: {Message}",
-                    (int)response.StatusCode, code, message);
+                _logger.LogError("BO logon başarısız. Ortam: {Environment}, HTTP {Status}, Kod: {Code}, Mesaj: {Message}",
+                    environment, (int)response.StatusCode, code, message);
                 throw new BoAuthenticationException($"BO logon başarısız: {message}", code, (int)response.StatusCode);
             }
 
-            // Öncelik header'da; yoksa gövdedeki logonToken (doğrulanmalı)
+            // Öncelik header'da; yoksa gövdedeki logonToken
             string? token = null;
             if (response.Headers.TryGetValues(TokenHeader, out var values))
                 token = values.FirstOrDefault();
@@ -147,30 +176,32 @@ public sealed class BoSessionService : IBoSessionService, IDisposable
         }
     }
 
-    private async Task LogoffTokenSafeAsync(string token, CancellationToken ct)
+    private async Task LogoffTokenSafeAsync(string environment, string token, CancellationToken ct)
     {
         try
         {
+            var env = GetEnvironment(environment);
             var client = _httpClientFactory.CreateClient(HttpClientName);
-            using var request = new HttpRequestMessage(HttpMethod.Post, "logoff");
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, BoUrl.Combine(env.BaseUrl, "logoff"));
             request.Headers.TryAddWithoutValidation(TokenHeader, token);
 
             using var response = await client.SendAsync(request, ct);
             if (response.IsSuccessStatusCode)
-                _logger.LogInformation("BO oturumu kapatıldı.");
+                _logger.LogInformation("BO oturumu kapatıldı. Ortam: {Environment}", environment);
             else
-                _logger.LogWarning("BO logoff başarısız. HTTP {Status}", (int)response.StatusCode);
+                _logger.LogWarning("BO logoff başarısız. Ortam: {Environment}, HTTP {Status}", environment, (int)response.StatusCode);
         }
         catch (Exception ex)
         {
             // Logoff hatası kritik değil; oturum BO tarafında zaman aşımıyla kapanır
-            _logger.LogWarning(ex, "BO logoff sırasında hata.");
+            _logger.LogWarning(ex, "BO logoff sırasında hata. Ortam: {Environment}", environment);
         }
     }
 
     /// <summary>
     /// BO token'ı header'da çift tırnak içinde bekler: X-SAP-LogonToken: "COMMANDCOM:6400@{...}"
-    /// Gövdeden gelen token tırnaksızsa tırnak eklenir (doğrulanmalı).
+    /// Gövdeden gelen token tırnaksızsa tırnak eklenir.
     /// </summary>
     private static string NormalizeToken(string token)
     {
@@ -178,5 +209,17 @@ public sealed class BoSessionService : IBoSessionService, IDisposable
         return token.StartsWith('"') && token.EndsWith('"') ? token : $"\"{token}\"";
     }
 
-    public void Dispose() => _lock.Dispose();
+    public void Dispose()
+    {
+        foreach (var slot in _slots.Values)
+            slot.Lock.Dispose();
+    }
+}
+
+/// <summary>URL yardımcıları.</summary>
+internal static class BoUrl
+{
+    /// <summary>"http://x:6405/biprws" + "v1/cmsquery" -> "http://x:6405/biprws/v1/cmsquery"</summary>
+    public static Uri Combine(string baseUrl, string relativePath) =>
+        new(new Uri(baseUrl.TrimEnd('/') + "/"), relativePath.TrimStart('/'));
 }

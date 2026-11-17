@@ -36,10 +36,13 @@
     refreshSelection();
 
     // ------------------------------------------------------------
-    // Silme önizleme: işlem türü + sayı ile onay
+    // Silme / toplu silme önizleme: işlem türü + sayı ile onay
     // ------------------------------------------------------------
-    const form = document.getElementById('deleteForm');
+    const form = document.getElementById('deleteForm') || document.getElementById('bulkForm');
     if (!form) return;
+
+    // Toplu silme formunda işlem türü seçimi yok; buton metni sabit kalır
+    const hasOperationChoice = form.querySelector('input[name="MoveToArchive"]') !== null;
 
     const confirmInput = document.getElementById('confirmCount');
     const confirmBtn = document.getElementById('confirmBtn');
@@ -61,8 +64,10 @@
         }
 
         if (confirmBtn) {
-            confirmBtn.textContent = archive ? 'Onayla ve arşive taşı' : 'Onayla ve sil';
-            confirmBtn.className = archive ? 'btn btn-warning' : 'btn btn-danger';
+            if (hasOperationChoice) {
+                confirmBtn.textContent = archive ? 'Onayla ve arşive taşı' : 'Onayla ve sil';
+                confirmBtn.className = archive ? 'btn btn-warning' : 'btn btn-danger';
+            }
             if (confirmInput) {
                 confirmBtn.disabled = confirmInput.value.trim() !== confirmInput.dataset.expected;
             }

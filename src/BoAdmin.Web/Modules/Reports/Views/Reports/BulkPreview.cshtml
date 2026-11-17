@@ -1,0 +1,164 @@
+@model BulkPreviewViewModel
+@inject BoAdmin.Web.Infrastructure.CurrentEnvironmentAccessor CurrentEnvironment
+@{
+    ViewData["Title"] = "Toplu Silme Önizleme";
+    var p = Model.Preview;
+    var toProcess = Model.ToProcess;
+}
+
+<partial name="_ReportsNav" model="@("Bulk")" />
+
+<h1 class="h5 mb-3">
+    Toplu silme önizleme
+    <span class="badge text-bg-@CurrentEnvironment.Color align-middle ms-1">@CurrentEnvironment.DisplayName</span>
+</h1>
+
+@if (Model.ErrorMessage is not null)
+{
+    <div class="alert alert-danger">@Model.ErrorMessage</div>
+}
+
+@* ---------------- Özet ---------------- *@
+<div class="row g-2 mb-3">
+    <div class="col-md-3">
+        <div class="card card-body py-2 shadow-sm">
+            <div class="small text-muted">Dosya</div>
+            <div class="text-truncate" title="@Model.FileName">@Model.FileName</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-body py-2 shadow-sm">
+            <div class="small text-muted">Yedek klasörü</div>
+            <div>@p.TargetFolder.Path <span class="small text-muted">(ID: @p.TargetFolder.Id)</span></div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card card-body py-2 shadow-sm">
+            <div class="small text-muted">Bulunan rapor</div>
+            <div class="fs-5 fw-semibold">@p.Items.Count</div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card card-body py-2 shadow-sm">
+            <div class="small text-muted">İşlenecek</div>
+            <div class="fs-5 fw-semibold">@toProcess.Count</div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card card-body py-2 shadow-sm">
+            <div class="small text-muted">Bulunamayan CUID</div>
+            <div class="fs-5 fw-semibold @(p.NotFoundCuids.Count > 0 ? "text-danger" : "")">@p.NotFoundCuids.Count</div>
+        </div>
+    </div>
+</div>
+
+@* ---------------- Uyarılar ---------------- *@
+@if (p.NotFoundCuids.Count > 0)
+{
+    <div class="alert alert-warning small">
+        <strong>@p.NotFoundCuids.Count CUID</strong> bu ortamda bulunamadı veya desteklenen bir rapor türü değil; işleme alınmayacak.
+        <details class="mt-1">
+            <summary>Listeyi göster</summary>
+            <div class="font-monospace mt-1">@string.Join(", ", p.NotFoundCuids)</div>
+        </details>
+    </div>
+}
+
+@if (p.InvalidEntries.Count > 0)
+{
+    <div class="alert alert-warning small">
+        Dosyada CUID biçimine uymayan <strong>@p.InvalidEntries.Count</strong> değer yok sayıldı.
+        <details class="mt-1">
+            <summary>Listeyi göster</summary>
+            <div class="font-monospace mt-1">@string.Join(", ", p.InvalidEntries)</div>
+        </details>
+    </div>
+}
+
+@if (p.DuplicateCount > 0)
+{
+    <div class="alert alert-light border small">Dosyada tekrar eden @p.DuplicateCount CUID bir kez sayıldı.</div>
+}
+
+@if (p.AlreadyInTargetCount > 0)
+{
+    <div class="alert alert-light border small">@p.AlreadyInTargetCount rapor zaten yedek klasöründe; işleme alınmayacak.</div>
+}
+
+@if (toProcess.Count == 0)
+{
+    <div class="alert alert-info">İşlenecek rapor yok.</div>
+    <a asp-action="Bulk" class="btn btn-outline-secondary btn-sm">Geri dön</a>
+}
+else
+{
+    @* ---------------- Rapor listesi ---------------- *@
+    <div class="card shadow-sm mb-3">
+        <div class="card-header">
+            Yedek klasörüne taşınacak raporlar: <strong>@toProcess.Count</strong>
+            <span class="text-muted small ms-2">Toplam instance: @(toProcess.Sum(i => i.InstanceCount)) (raporla birlikte taşınır)</span>
+        </div>
+        <div class="table-responsive preview-table">
+            <table class="table table-sm mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Rapor adı</th>
+                        <th>Tip</th>
+                        <th>Bulunduğu klasör</th>
+                        <th>Sahip</th>
+                        <th class="text-end">Instance</th>
+                        <th>CUID</th>
+                        <th>ID</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in toProcess)
+                    {
+                        var r = item.Report;
+                        <tr>
+                            <td>@r.Name</td>
+                            <td><span class="badge text-bg-light border">@r.KindDisplayName</span></td>
+                            <td class="small text-muted">@r.FolderPath</td>
+                            <td>@r.Owner</td>
+                            <td class="text-end">@item.InstanceCount</td>
+                            <td class="small text-muted font-monospace">@r.Cuid</td>
+                            <td class="small text-muted">@r.Id</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    @* ---------------- Onay ---------------- *@
+    <form method="post" asp-action="BulkExecute" id="bulkForm" class="card card-body shadow-sm">
+        <input type="hidden" name="Environment" value="@CurrentEnvironment.Key" />
+        <input type="hidden" name="TargetFolderId" value="@p.TargetFolder.Id" />
+        @foreach (var item in toProcess)
+        {
+            <input type="hidden" name="SelectedIds" value="@item.Report.Id" />
+        }
+
+        <div class="mb-3">
+            <label for="confirmCount" class="form-label">
+                Onaylamak için işlenecek rapor sayısını yazın: <strong>@toProcess.Count</strong>
+            </label>
+            <input type="number" class="form-control form-control-sm w-auto" id="confirmCount" name="ConfirmationCount"
+                   data-expected="@toProcess.Count" min="1" autocomplete="off" required />
+        </div>
+
+        <div class="alert @(CurrentEnvironment.IsCritical ? "alert-danger fw-semibold" : "alert-warning") small">
+            @toProcess.Count rapor <strong>@CurrentEnvironment.DisplayName</strong> ortamında bulundukları klasörlerden
+            <strong>@p.TargetFolder.Path</strong> klasörüne taşınacak.
+        </div>
+
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-danger" id="confirmBtn" disabled>Onayla: yedekle ve sil</button>
+            <a asp-action="Bulk" class="btn btn-outline-secondary">Vazgeç</a>
+        </div>
+    </form>
+}
+
+@section Scripts {
+    <script src="~/js/reports.js" asp-append-version="true"></script>
+}

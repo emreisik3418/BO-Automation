@@ -1,18 +1,38 @@
 namespace BoAdmin.Web.Authorization;
 
 /// <summary>
-/// appsettings.json > "Authorization" bölümü.
+/// Ortam bazlı modül yetkileri. "SapBo" bölümünden okunur; her ortamın "Authorization" alt bölümü:
+///
+/// "SapBo": {
+///   "Environments": {
+///     "TEST": { ..., "Authorization": { "Reports": { "AllowedUsers": [...], "AllowedGroups": [...] } } },
+///     "PROD": { ..., "Authorization": { "Reports": { ... } } }
+///   }
+/// }
+///
 /// IOptionsMonitor ile okunduğu için dosya değişince uygulamayı yeniden başlatmaya gerek yoktur.
 /// </summary>
 public sealed class ModuleAuthorizationOptions
 {
-    public const string SectionName = "Authorization";
+    public const string SectionName = "SapBo";
 
-    public Dictionary<string, ModuleAccessRule> Modules { get; set; } = new();
+    public Dictionary<string, EnvironmentAuthorization> Environments { get; set; } = new();
 
-    /// <summary>Modül kuralını büyük/küçük harf duyarsız bulur. Tanımlı değilse null döner (erişim yok).</summary>
-    public ModuleAccessRule? GetRule(string moduleName) =>
-        Modules.FirstOrDefault(kv => string.Equals(kv.Key, moduleName, StringComparison.OrdinalIgnoreCase)).Value;
+    /// <summary>Ortam + modül kuralını büyük/küçük harf duyarsız bulur. Tanımlı değilse null (erişim yok).</summary>
+    public ModuleAccessRule? GetRule(string environment, string moduleName)
+    {
+        var env = Environments
+            .FirstOrDefault(kv => string.Equals(kv.Key, environment, StringComparison.OrdinalIgnoreCase)).Value;
+
+        return env?.Authorization
+            .FirstOrDefault(kv => string.Equals(kv.Key, moduleName, StringComparison.OrdinalIgnoreCase)).Value;
+    }
+}
+
+public sealed class EnvironmentAuthorization
+{
+    /// <summary>Modül adı (Reports, Users, Groups) -> kural</summary>
+    public Dictionary<string, ModuleAccessRule> Authorization { get; set; } = new();
 }
 
 public sealed class ModuleAccessRule

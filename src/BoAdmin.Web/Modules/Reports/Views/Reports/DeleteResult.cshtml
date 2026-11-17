@@ -1,12 +1,16 @@
 @model DeleteResultViewModel
+@inject BoAdmin.Web.Infrastructure.CurrentEnvironmentAccessor CurrentEnvironment
 @{
     ViewData["Title"] = "İşlem Sonucu";
-    var operationText = Model.MoveToArchive ? "Arşive taşıma" : "Silme";
+    var isBulk = Model.Operation == ReportOperation.BackupMove;
 }
 
-<partial name="_ReportsNav" model="@("Search")" />
+<partial name="_ReportsNav" model="@(isBulk ? "Bulk" : "Search")" />
 
-<h1 class="h5 mb-3">@operationText sonucu</h1>
+<h1 class="h5 mb-3">
+    @Model.OperationText sonucu
+    <span class="badge text-bg-@CurrentEnvironment.Color align-middle ms-1">@CurrentEnvironment.DisplayName</span>
+</h1>
 
 <div class="d-flex flex-wrap gap-2 mb-3">
     <div class="alert alert-success py-2 mb-0">Başarılı: <strong>@Model.SuccessCount</strong></div>
@@ -49,6 +53,13 @@
 </div>
 
 <div class="d-flex gap-2">
-    <a asp-action="Index" class="btn btn-primary btn-sm">Rapor aramaya dön</a>
+    @if (isBulk)
+    {
+        <a asp-action="Bulk" class="btn btn-primary btn-sm">Yeni toplu işlem</a>
+    }
+    else
+    {
+        <a asp-action="Index" class="btn btn-primary btn-sm">Rapor aramaya dön</a>
+    }
     <a asp-action="History" class="btn btn-outline-secondary btn-sm">İşlem geçmişi</a>
 </div>

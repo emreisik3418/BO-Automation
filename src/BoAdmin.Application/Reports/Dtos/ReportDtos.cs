@@ -49,7 +49,8 @@ public sealed record ReportListItemDto(
     string? Owner,
     int ParentFolderId,
     string FolderPath,
-    DateTime? UpdatedAt);
+    DateTime? UpdatedAt,
+    string? Cuid = null);
 
 public sealed record FolderDto(int Id, string Name, string Path);
 
@@ -83,7 +84,22 @@ public enum ReportOperation
 {
     Delete,
     Archive,
-    DeleteInstance
+    DeleteInstance,
+
+    /// <summary>TXT ile toplu işlem: yedek klasörüne taşıma</summary>
+    BackupMove
+}
+
+/// <summary>TXT (CUID listesi) ile toplu yedekleme önizlemesi.</summary>
+public sealed record BulkBackupPreviewDto(
+    IReadOnlyList<DeletePreviewItemDto> Items,
+    IReadOnlyList<string> NotFoundCuids,
+    IReadOnlyList<string> InvalidEntries,
+    int DuplicateCount,
+    FolderDto TargetFolder)
+{
+    public int TotalInstanceCount => Items.Sum(i => i.InstanceCount);
+    public int AlreadyInTargetCount => Items.Count(i => i.Report.ParentFolderId == TargetFolder.Id);
 }
 
 /// <summary>Toplu işlemde tek raporun sonucu.</summary>

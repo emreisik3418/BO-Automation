@@ -13,7 +13,7 @@ public enum DeleteOutcome
 }
 
 /// <summary>
-/// SAP BO rapor işlemleri. Application katmanı REST ayrıntılarını bilmez;
+/// SAP BO rapor işlemleri (kullanıcının seçtiği ortamda). Application katmanı REST ayrıntılarını bilmez;
 /// implementasyon Infrastructure/Bo/BoReportGateway.cs içindedir.
 /// </summary>
 public interface IBoReportGateway
@@ -22,6 +22,9 @@ public interface IBoReportGateway
 
     /// <summary>Verilen ID'lerden yalnızca desteklenen türdeki raporları döndürür (instance ve diğer nesneler hariç).</summary>
     Task<IReadOnlyList<ReportListItemDto>> GetReportsByIdsAsync(IReadOnlyCollection<int> ids, CancellationToken ct = default);
+
+    /// <summary>Verilen CUID'lerden yalnızca desteklenen türdeki raporları döndürür.</summary>
+    Task<IReadOnlyList<ReportListItemDto>> GetReportsByCuidsAsync(IReadOnlyCollection<string> cuids, CancellationToken ct = default);
 
     /// <summary>Rapor ID -> instance sayısı</summary>
     Task<IReadOnlyDictionary<int, int>> GetInstanceCountsAsync(IReadOnlyCollection<int> reportIds, CancellationToken ct = default);
@@ -35,6 +38,9 @@ public interface IBoReportGateway
     Task MoveToFolderAsync(int id, string kind, int targetFolderId, CancellationToken ct = default);
 
     Task<IReadOnlyList<FolderDto>> GetFoldersAsync(CancellationToken ct = default);
+
+    /// <summary>Klasör bilgisi (yol dahil). Bulunamazsa null.</summary>
+    Task<FolderDto?> GetFolderAsync(int folderId, CancellationToken ct = default);
 
     /// <summary>Config'teki arşiv klasörü. Tanımlı değilse (0) null.</summary>
     Task<FolderDto?> GetArchiveFolderAsync(CancellationToken ct = default);

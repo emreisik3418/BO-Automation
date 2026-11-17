@@ -66,8 +66,8 @@ public sealed class FileAuditLogService : IAuditLogService
     {
         // 1) Uygulama loguna da yaz (yedek iz)
         _logger.LogInformation(
-            "AUDIT {Module}/{Operation} Kullanıcı={User} Nesne={ObjectId} '{ObjectName}' Klasör={Folder} Hedef={Target} Sonuç={Success} Mesaj={Message} Batch={BatchId}",
-            entry.Module, entry.Operation, entry.UserName, entry.ObjectId, entry.ObjectName,
+            "AUDIT [{Environment}] {Module}/{Operation} Kullanıcı={User} Nesne={ObjectId} '{ObjectName}' Klasör={Folder} Hedef={Target} Sonuç={Success} Mesaj={Message} Batch={BatchId}",
+            entry.Environment, entry.Module, entry.Operation, entry.UserName, entry.ObjectId, entry.ObjectName,
             entry.FolderPath, entry.TargetPath, entry.Success ? "Başarılı" : "Başarısız", entry.Message, entry.BatchId);
 
         // 2) Audit dosyası
@@ -150,6 +150,9 @@ public sealed class FileAuditLogService : IAuditLogService
         if (fromUtc is not null) query = query.Where(x => x.TimestampUtc >= fromUtc);
         if (toUtc is not null) query = query.Where(x => x.TimestampUtc < toUtc);
 
+        if (!string.IsNullOrWhiteSpace(q.Environment))
+            query = query.Where(x => Eq(x.Environment, q.Environment));
+
         if (!string.IsNullOrWhiteSpace(q.Module))
             query = query.Where(x => Eq(x.Module, q.Module));
 
@@ -169,7 +172,8 @@ public sealed class FileAuditLogService : IAuditLogService
         {
             var o = q.ObjectContains.Trim();
             var isId = int.TryParse(o, out var objectId);
-            query = query.Where(x => (isId && x.ObjectId == objectId) || Has(x.ObjectName, o) || Has(x.FolderPath, o));
+            query = query.Where(x => (isId && x.ObjectId == objectId) || Has(x.ObjectName, o) || Has(x.FolderPath, o)
+                                     || string.Equals(x.ObjectCuid, o, StringComparison.Ordinal));
         }
 
         var filtered = query.OrderByDescending(x => x.TimestampUtc).ToList();

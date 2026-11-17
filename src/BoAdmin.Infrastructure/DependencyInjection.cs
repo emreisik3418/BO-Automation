@@ -19,14 +19,16 @@ public static class DependencyInjection
         // ---------------- SAP BO ayarları ----------------
         services.AddOptions<BoOptions>()
             .Bind(configuration.GetSection(BoOptions.SectionName))
-            .Validate(o => Uri.TryCreate(o.BaseUrl, UriKind.Absolute, out _),
-                "SapBo:BaseUrl geçerli bir adres olmalı (örn. http://bo-server:6405/biprws).")
-            .Validate(o => !string.IsNullOrWhiteSpace(o.UserName),
-                "SapBo:UserName tanımlı değil.")
-            .Validate(o => !string.IsNullOrWhiteSpace(o.Password),
-                "SapBo:Password tanımlı değil. Geliştirmede User Secrets, prod'da SapBo__Password ortam değişkeni kullanın.")
-            .Validate(o => o.AuthType is "secEnterprise" or "secWinAD" or "secLDAP",
-                "SapBo:AuthType secEnterprise, secWinAD veya secLDAP olmalı.")
+            .Validate(o => o.Environments.Count > 0,
+                "SapBo:Environments altında en az bir ortam tanımlanmalı.")
+            .Validate(o => o.Find(o.DefaultEnvironment) is not null,
+                "SapBo:DefaultEnvironment, SapBo:Environments altındaki ortamlardan biri olmalı.")
+            .Validate(o => o.Environments.Values.All(e => Uri.TryCreate(e.BaseUrl, UriKind.Absolute, out _)),
+                "Her ortamın BaseUrl değeri geçerli bir adres olmalı (örn. http://bo-server:6405/biprws).")
+            .Validate(o => o.Environments.Values.All(e => e.AuthType is "secEnterprise" or "secWinAD" or "secLDAP"),
+                "AuthType secEnterprise, secWinAD veya secLDAP olmalı.")
+            // Şifre başlangıçta zorunlu tutulmaz: geliştirmede yalnızca TEST şifresi girilmiş olabilir.
+            // Şifresi olmayan ortama geçilince ekranda açık hata mesajı gösterilir.
             .ValidateOnStart();
 
         services.AddMemoryCache();
@@ -87,8 +89,7 @@ public static class DependencyInjection
     {
         var options = sp.GetRequiredService<IOptions<BoOptions>>().Value;
 
-        // Göreli yolların doğru birleşmesi için BaseAddress "/" ile bitmeli
-        client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
+        // BaseAddress yok: her istek seçili ortamın tam adresiyle gönderilir (BoUrl.Combine)
         client.Timeout = TimeSpan.FromSeconds(Math.Max(5, options.RequestTimeoutSeconds));
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
     }

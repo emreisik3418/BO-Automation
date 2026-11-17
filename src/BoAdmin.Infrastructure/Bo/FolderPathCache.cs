@@ -1,48 +1,47 @@
 using BoAdmin.Application.Reports.Dtos;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace BoAdmin.Infrastructure.Bo;
 
 /// <summary>
 /// CMS klasör yolu doğrudan sorgulanamadığı için tüm klasörler bir kez çekilir,
-/// bellekte ağaç kurulur ve 10 dakika önbellekte tutulur.
+/// bellekte ağaç kurulur ve ortam bazında 10 dakika önbellekte tutulur.
 /// </summary>
 public sealed class FolderPathCache
 {
-    private const string CacheKey = "bo-folder-tree";
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(10);
     private static readonly SemaphoreSlim LoadLock = new(1, 1);
-
-    /// <summary>
-    /// Public Folders kökünün SI_ID'si (standart kurulumda 23 - doğrulanmalı).
-    /// Yollar bu klasörün altından başlar: /Satış/Aylık
-    /// </summary>
-    public const int RootFolderId = 23;
 
     private const string Query =
         "SELECT SI_ID, SI_NAME, SI_PARENTID FROM CI_INFOOBJECTS WHERE SI_KIND IN ('Folder','FavoritesFolder')";
 
     private readonly BoRestClient _client;
     private readonly IMemoryCache _cache;
+    private readonly IOptionsMonitor<BoOptions> _options;
     private readonly ILogger<FolderPathCache> _logger;
 
-    public FolderPathCache(BoRestClient client, IMemoryCache cache, ILogger<FolderPathCache> logger)
+    public FolderPathCache(BoRestClient client, IMemoryCache cache, IOptionsMonitor<BoOptions> options, ILogger<FolderPathCache> logger)
     {
         _client = client;
         _cache = cache;
+        _options = options;
         _logger = logger;
     }
 
+    private string CacheKey => $"bo-folder-tree:{_client.EnvironmentKey.ToUpperInvariant()}";
+
     public async Task<FolderTree> GetTreeAsync(CancellationToken ct = default)
     {
-        if (_cache.TryGetValue(CacheKey, out FolderTree? tree) && tree is not null)
+        var key = CacheKey;
+        if (_cache.TryGetValue(key, out FolderTree? tree) && tree is not null)
             return tree;
 
         await LoadLock.WaitAsync(ct);
         try
         {
-            if (_cache.TryGetValue(CacheKey, out tree) && tree is not null)
+            if (_cache.TryGetValue(key, out tree) && tree is not null)
                 return tree;
 
             var entries = await _client.CmsQueryAllAsync(Query, pageSize: 1000, ct: ct);
@@ -55,10 +54,11 @@ public sealed class FolderPathCache
                 .Where(n => n.Id > 0)
                 .ToList();
 
-            tree = new FolderTree(nodes);
-            _cache.Set(CacheKey, tree, CacheDuration);
+            var rootId = _options.CurrentValue.Find(_client.EnvironmentKey)?.RootFolderId ?? 23;
+            tree = new FolderTree(nodes, rootId);
+            _cache.Set(key, tree, CacheDuration);
 
-            _logger.LogInformation("Klasör ağacı yüklendi: {Count} klasör.", nodes.Count);
+            _logger.LogInformation("Klasör ağacı yüklendi. Ortam: {Environment}, {Count} klasör.", _client.EnvironmentKey, nodes.Count);
             return tree;
         }
         finally
@@ -75,12 +75,15 @@ public sealed record FolderNode(int Id, string Name, int ParentId);
 /// <summary>Bellekteki klasör ağacı: ID -> yol, alt klasörler.</summary>
 public sealed class FolderTree
 {
+    private readonly int _rootId;
     private readonly Dictionary<int, FolderNode> _nodes;
     private readonly Dictionary<int, List<int>> _children = new();
     private readonly Dictionary<int, string> _paths = new();
 
-    public FolderTree(IEnumerable<FolderNode> nodes)
+    /// <param name="rootId">Public Folders kökünün SI_ID'si; yollar bunun altından başlar (/Satış/Aylık).</param>
+    public FolderTree(IEnumerable<FolderNode> nodes, int rootId)
     {
+        _rootId = rootId;
         _nodes = nodes.GroupBy(n => n.Id).ToDictionary(g => g.Key, g => g.First());
 
         foreach (var n in _nodes.Values)
@@ -99,7 +102,7 @@ public sealed class FolderTree
     /// <summary>Klasörün tam yolu. Bilinmeyen ID için "(Klasör ID: x)".</summary>
     public string GetPath(int folderId)
     {
-        if (folderId == FolderPathCache.RootFolderId) return "/";
+        if (folderId == _rootId) return "/";
         return _paths.TryGetValue(folderId, out var p) ? p : $"(Klasör ID: {folderId})";
     }
 
@@ -128,7 +131,7 @@ public sealed class FolderTree
 
     public IReadOnlyList<FolderDto> GetAll() =>
         _nodes.Values
-            .Where(n => n.Id != FolderPathCache.RootFolderId)
+            .Where(n => n.Id != _rootId)
             .Select(n => new FolderDto(n.Id, n.Name, GetPath(n.Id)))
             .OrderBy(f => f.Path, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
@@ -140,7 +143,7 @@ public sealed class FolderTree
         var current = folderId;
 
         // Köke (Public Folders) veya bilinmeyen üst klasöre kadar yukarı çık; döngü koruması var
-        while (current != 0 && current != FolderPathCache.RootFolderId
+        while (current != 0 && current != _rootId
                && _nodes.TryGetValue(current, out var node) && visited.Add(current))
         {
             parts.Add(node.Name);

@@ -16,7 +16,7 @@ namespace BoAdmin.Infrastructure.Bo;
 /// </summary>
 public sealed class BoReportGateway : IBoReportGateway
 {
-    private const string ReportFields = "SI_ID, SI_NAME, SI_KIND, SI_OWNER, SI_PARENTID, SI_UPDATE_TS";
+    private const string ReportFields = "SI_ID, SI_CUID, SI_NAME, SI_KIND, SI_OWNER, SI_PARENTID, SI_UPDATE_TS";
     private const int InClauseChunkSize = 100;
 
     private readonly BoRestClient _client;
@@ -35,6 +35,11 @@ public sealed class BoReportGateway : IBoReportGateway
         _options = options;
         _logger = logger;
     }
+
+    /// <summary>Kullanıcının seçtiği ortamın ayarları.</summary>
+    private BoEnvironmentOptions Env =>
+        _options.CurrentValue.Find(_client.EnvironmentKey)
+        ?? throw new BoOperationException($"'{_client.EnvironmentKey}' ortamı yapılandırmada tanımlı değil.");
 
     private static string SupportedKindsClause =>
         CmsQueryBuilder.InList("SI_KIND", ReportKinds.All.Select(k => k.Kind));
@@ -114,6 +119,25 @@ public sealed class BoReportGateway : IBoReportGateway
         return list;
     }
 
+    public async Task<IReadOnlyList<ReportListItemDto>> GetReportsByCuidsAsync(IReadOnlyCollection<string> cuids, CancellationToken ct = default)
+    {
+        if (cuids.Count == 0) return Array.Empty<ReportListItemDto>();
+
+        var tree = await _folders.GetTreeAsync(ct);
+        var list = new List<ReportListItemDto>();
+
+        foreach (var chunk in cuids.Distinct(StringComparer.Ordinal).Chunk(InClauseChunkSize))
+        {
+            var query = $"SELECT {ReportFields} FROM CI_INFOOBJECTS " +
+                        $"WHERE {CmsQueryBuilder.InList("SI_CUID", chunk)} AND SI_INSTANCE = 0 AND {SupportedKindsClause}";
+
+            var entries = await _client.CmsQueryAllAsync(query, pageSize: InClauseChunkSize, ct: ct);
+            list.AddRange(entries.Select(e => Map(e, tree)));
+        }
+
+        return list;
+    }
+
     // ------------------------------------------------------------------
     // Instance'lar
     // ------------------------------------------------------------------
@@ -149,7 +173,7 @@ public sealed class BoReportGateway : IBoReportGateway
 
     public async Task<DeleteOutcome> DeleteObjectAsync(int id, string kind, int parentId, CancellationToken ct = default)
     {
-        var strategy = _options.CurrentValue.DeleteStrategy;
+        var strategy = Env.DeleteStrategy;
 
         switch (strategy)
         {
@@ -181,7 +205,7 @@ public sealed class BoReportGateway : IBoReportGateway
         }
 
         throw new BoOperationException(
-            "Silme isteği başarılı döndü ancak nesne hâlâ BO'da duruyor. 'SapBo:DeleteStrategy' ayarını kontrol edin.");
+            "Silme isteği başarılı döndü ancak nesne hâlâ BO'da duruyor. Ortamın 'DeleteStrategy' ayarını kontrol edin.");
     }
 
     // ------------------------------------------------------------------
@@ -190,7 +214,7 @@ public sealed class BoReportGateway : IBoReportGateway
 
     public async Task MoveToFolderAsync(int id, string kind, int targetFolderId, CancellationToken ct = default)
     {
-        var strategy = _options.CurrentValue.MoveStrategy;
+        var strategy = Env.MoveStrategy;
 
         switch (strategy)
         {
@@ -209,7 +233,7 @@ public sealed class BoReportGateway : IBoReportGateway
         if (parent != targetFolderId)
         {
             throw new BoOperationException(
-                "Taşıma isteği kabul edildi ancak rapor hedef klasörde görünmüyor. 'SapBo:MoveStrategy' ayarını kontrol edin.");
+                "Taşıma isteği kabul edildi ancak rapor hedef klasörde görünmüyor. Ortamın 'MoveStrategy' ayarını kontrol edin.");
         }
 
         _logger.LogInformation("Rapor taşındı: {Id} -> klasör {Folder}", id, targetFolderId);
@@ -252,12 +276,20 @@ public sealed class BoReportGateway : IBoReportGateway
 
     public async Task<FolderDto?> GetArchiveFolderAsync(CancellationToken ct = default)
     {
-        var archiveId = _options.CurrentValue.ArchiveFolderId;
+        var archiveId = Env.ArchiveFolderId;
         if (archiveId <= 0) return null;
 
         var tree = await _folders.GetTreeAsync(ct);
         return tree.GetFolder(archiveId)
-            ?? throw new BoOperationException($"Arşiv klasörü BO'da bulunamadı (SapBo:ArchiveFolderId = {archiveId}).");
+            ?? throw new BoOperationException(
+                $"Arşiv klasörü BO'da bulunamadı ({_client.EnvironmentKey} ortamı, ArchiveFolderId = {archiveId}).");
+    }
+
+    public async Task<FolderDto?> GetFolderAsync(int folderId, CancellationToken ct = default)
+    {
+        if (folderId <= 0) return null;
+        var tree = await _folders.GetTreeAsync(ct);
+        return tree.GetFolder(folderId);
     }
 
     // ------------------------------------------------------------------
@@ -282,6 +314,7 @@ public sealed class BoReportGateway : IBoReportGateway
             Owner: e.GetString("SI_OWNER"),
             ParentFolderId: parentId,
             FolderPath: tree.GetPath(parentId),
-            UpdatedAt: e.GetDateTime("SI_UPDATE_TS"));
+            UpdatedAt: e.GetDateTime("SI_UPDATE_TS"),
+            Cuid: e.GetString("SI_CUID"));
     }
 }

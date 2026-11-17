@@ -22,27 +22,53 @@ Bağımlılık yönü: `Web → Application ← Infrastructure` (Web, compositio
 | Kullanıcı İşlemleri (`Users`) | Yakında |
 | Grup İşlemleri (`Groups`) | Yakında |
 
-## Geliştirme ortamı
+## Ortamlar (DEV / TEST / PROD)
 
-1. BO servis hesabı şifresi **asla** `appsettings.json`'a yazılmaz.
-   Visual Studio'da `BoAdmin.Web` > sağ tık > **Manage User Secrets**:
-   ```json
-   { "SapBo": { "Password": "..." } }
-   ```
-2. Prod ortamında ortam değişkeni: `SapBo__Password` (IIS app pool ortam değişkeni).
-3. Audit kayıtları veritabanına değil, aylık JSON Lines dosyalarına yazılır: `Audit:Directory` altında `audit-2026-11.jsonl`.
-   Geliştirmede `logs/audit`, prod'da `D:\Logs\BoAdmin\audit`. IIS app pool kimliğine bu klasörde **Modify** yetkisi verilmeli.
+Birden fazla BO ortamı `SapBo:Environments` altında tanımlanır. Kullanıcı sağ üstteki **Ortam** menüsünden
+yetkili olduğu ortamlar arasında geçer; seçim cookie'de saklanır. Aktif ortam rengi menünün altındaki şeritte
+görünür (`Color: danger` = kırmızı, PROD için önerilir).
+
+Her ortamın **kendi yetkileri** vardır (`SapBo:Environments:{ORTAM}:Authorization:{Modül}`).
+Kullanıcı bir ortamda yalnızca o ortamın sicil/grup listesine uyuyorsa işlem yapabilir.
+
+## Şifreler
+
+BO servis hesabı şifreleri **asla** `appsettings.json`'a yazılmaz.
+
+- Geliştirme: `BoAdmin.Web` > sağ tık > **Manage User Secrets**
+  ```json
+  { "SapBo": { "Environments": { "TEST": { "Password": "..." }, "PROD": { "Password": "..." } } } }
+  ```
+- Prod (IIS app pool ortam değişkeni): `SapBo__Environments__PROD__Password`, `SapBo__Environments__TEST__Password`
+
+Şifresi tanımlı olmayan ortama geçilirse uygulama açılır, ilk BO işleminde açık hata mesajı gösterilir.
+
+## Audit
+
+Kayıtlar aylık JSON Lines dosyalarına yazılır: `Audit:Directory` altında `audit-2026-11.jsonl`
+(ortam, kullanıcı, işlem, rapor ID/CUID/ad/klasör, hedef klasör, sonuç). Geliştirmede `logs/audit`,
+prod'da `D:\Logs\BoAdmin\audit`. IIS app pool kimliğine bu klasörde **Modify** yetkisi verilmeli.
 
 ## `SapBo` ayarları
 
 | Anahtar | Açıklama |
 |---|---|
-| `BaseUrl` | `http://<sunucu>:6405/biprws` |
-| `AuthType` | `secEnterprise` / `secWinAD` / `secLDAP` |
+| `DefaultEnvironment` | İlk açılışta seçili ortam |
 | `TokenLifetimeMinutes` | Token bu süreden sonra yenilenir (BO oturum süresinden kısa olmalı) |
-| `ArchiveFolderId` | "Kurtarılabilir silme" için arşiv klasörünün `SI_ID`'si (0 = kapalı) |
-| `DeleteStrategy` | `InfoObjects` (`DELETE /v1/infoobjects/{id}`) veya `Raylight` (yalnızca Webi) |
-| `MoveStrategy` | `InfoObjects` (`PUT /v1/infoobjects/{id}`) veya `Raylight` |
+| `Environments:{ORTAM}:BaseUrl` | `http://<sunucu>:6405/biprws` |
+| `Environments:{ORTAM}:AuthType` | `secEnterprise` / `secWinAD` / `secLDAP` |
+| `Environments:{ORTAM}:RootFolderId` | Public Folders kökünün `SI_ID`'si (standart: 23) |
+| `Environments:{ORTAM}:ArchiveFolderId` | "Kurtarılabilir silme" arşiv klasörünün `SI_ID`'si (0 = kapalı) |
+| `Environments:{ORTAM}:DeleteStrategy` | `InfoObjects` (`DELETE /v1/infoobjects/{id}`) veya `Raylight` (yalnızca Webi) |
+| `Environments:{ORTAM}:MoveStrategy` | `InfoObjects` (`PUT /v1/infoobjects/{id}`) veya `Raylight` |
+| `Environments:{ORTAM}:Authorization` | Modül bazlı `AllowedUsers` / `AllowedGroups` |
+
+## Rapor İşlemleri
+
+- **Rapor Arama:** filtre, sıralama, sayfalama; tekli/çoklu silme veya arşive taşıma (önizleme + sayı ile onay)
+- **Toplu Silme (TXT):** CUID listesi yüklenir, yedek klasör ID'si girilir; raporlar yedek klasörüne
+  taşınarak bulundukları yerden kaldırılır (CUID, instance ve zamanlamalar korunur). En fazla 500 CUID.
+- **İşlem Geçmişi:** ortam bazlı filtre, CSV dışa aktarma
 
 ## Kod parçaları (ilerleme)
 
@@ -52,4 +78,5 @@ Bağımlılık yönü: `Web → Application ← Infrastructure` (Web, compositio
 - [x] Parça 4: Rapor gateway + rapor servisi
 - [x] Parça 5: Audit log - dosya tabanlı (+ hata filtresi, view konumları)
 - [x] Parça 6: Controller'lar + view'lar + layout
+- [x] Ek: Çok ortam desteği + TXT ile toplu silme
 - [ ] Parça 7: IIS kurulumu (`web.config`, adımlar)

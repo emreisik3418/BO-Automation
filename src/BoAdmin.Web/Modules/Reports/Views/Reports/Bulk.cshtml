@@ -1,0 +1,59 @@
+@model BulkUploadViewModel
+@inject BoAdmin.Web.Infrastructure.CurrentEnvironmentAccessor CurrentEnvironment
+@{
+    ViewData["Title"] = "Toplu Silme (TXT)";
+}
+
+<partial name="_ReportsNav" model="@("Bulk")" />
+
+<div class="row">
+    <div class="col-xl-7 col-lg-9">
+        <h1 class="h5 mb-3">
+            Toplu silme: CUID listesi ile
+            <span class="badge text-bg-@CurrentEnvironment.Color align-middle ms-1">@CurrentEnvironment.DisplayName</span>
+        </h1>
+
+        @if (Model.ErrorMessage is not null)
+        {
+            <div class="alert alert-danger">@Model.ErrorMessage</div>
+        }
+
+        <div class="alert alert-info small">
+            Listedeki raporlar önce girdiğiniz <strong>yedek klasörüne taşınır</strong> ve böylece bulundukları
+            klasörden kalkar. Raporun CUID'i, instance'ları ve zamanlamaları korunur; gerekirse yedek klasöründen
+            geri taşınabilir. Bir sonraki adımda tüm raporları görüp onaylamadan hiçbir işlem yapılmaz.
+        </div>
+
+        <form method="post" asp-action="BulkPreview" enctype="multipart/form-data" class="card card-body shadow-sm">
+            <div class="mb-3">
+                <label for="file" class="form-label">CUID listesi (.txt)</label>
+                <input type="file" class="form-control" id="file" name="file" accept=".txt,text/plain" required />
+                <div class="form-text">
+                    Her satıra bir CUID yazın. Virgül, noktalı virgül veya boşlukla ayrılmış CUID'ler de kabul edilir;
+                    <code>#</code> ile başlayan kısımlar açıklama sayılır. En fazla @Model.MaxCount CUID, 1 MB.
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label for="targetFolderId" class="form-label">Yedek klasör ID (SI_ID)</label>
+                <input type="number" class="form-control w-auto" id="targetFolderId" name="targetFolderId"
+                       value="@Model.TargetFolderId" min="1" required />
+                <div class="form-text">
+                    CMC'de klasöre sağ tık &gt; Properties ekranındaki ID değeri. Klasör @CurrentEnvironment.DisplayName ortamında olmalı.
+                </div>
+            </div>
+
+            <div>
+                <button type="submit" class="btn btn-primary">Önizle</button>
+            </div>
+        </form>
+
+        <details class="mt-3 small text-muted">
+            <summary>Örnek dosya</summary>
+            <pre class="bg-white border rounded p-2 mt-2 mb-0"># Kasım temizliği
+AaBbCcDdEeFf1234567890x
+AZ9yLmN0pQrStUvWxYz12Ab
+AdF4kL9mNpQr2StUvWx1YzA</pre>
+        </details>
+    </div>
+</div>

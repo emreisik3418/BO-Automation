@@ -77,6 +77,9 @@ public sealed class DeletePreviewViewModel
 /// <summary>Onay formundan gelen veri.</summary>
 public sealed class DeleteRequestModel
 {
+    /// <summary>Önizlemenin hazırlandığı ortam; işlem anındaki ortamla eşleşmeli.</summary>
+    public string Environment { get; set; } = string.Empty;
+
     public List<int> SelectedIds { get; set; } = new();
     public bool MoveToArchive { get; set; }
     public bool DeleteInstances { get; set; }
@@ -85,16 +88,53 @@ public sealed class DeleteRequestModel
 
 public sealed class DeleteResultViewModel
 {
-    public DeleteResultViewModel(IReadOnlyList<DeleteItemResult> results, bool moveToArchive)
+    public DeleteResultViewModel(IReadOnlyList<DeleteItemResult> results, ReportOperation operation, string? targetPath = null)
     {
         Results = results;
-        MoveToArchive = moveToArchive;
+        Operation = operation;
+        TargetPath = targetPath;
     }
 
     public IReadOnlyList<DeleteItemResult> Results { get; }
-    public bool MoveToArchive { get; }
+    public ReportOperation Operation { get; }
+    public string? TargetPath { get; }
+    public string OperationText => OperationNames.Get(Operation);
     public int SuccessCount => Results.Count(r => r.Success);
     public int FailCount => Results.Count(r => !r.Success);
+}
+
+// ----------------------------------------------------------------------
+// TXT ile toplu yedekleme
+// ----------------------------------------------------------------------
+
+/// <summary>Toplu işlem yükleme formu.</summary>
+public sealed class BulkUploadViewModel
+{
+    public int? TargetFolderId { get; set; }
+    public string? ErrorMessage { get; set; }
+    public int MaxCount => ReportService.MaxBulkSize;
+}
+
+public sealed class BulkPreviewViewModel
+{
+    public BulkPreviewViewModel(BulkBackupPreviewDto preview) => Preview = preview;
+
+    public BulkBackupPreviewDto Preview { get; }
+    public string? FileName { get; set; }
+    public string? ErrorMessage { get; set; }
+
+    /// <summary>Hedef klasörde olmayan, işlenecek raporlar.</summary>
+    public IReadOnlyList<DeletePreviewItemDto> ToProcess =>
+        Preview.Items.Where(i => i.Report.ParentFolderId != Preview.TargetFolder.Id).ToList();
+}
+
+/// <summary>Toplu işlem onay formundan gelen veri.</summary>
+public sealed class BulkExecuteModel
+{
+    public string Environment { get; set; } = string.Empty;
+    public int TargetFolderId { get; set; }
+    public List<int> SelectedIds { get; set; } = new();
+    public int ConfirmationCount { get; set; }
 }
 
 // ----------------------------------------------------------------------
@@ -119,6 +159,7 @@ public sealed class HistoryViewModel
             if (!string.IsNullOrEmpty(s)) d[$"Query.{key}"] = s;
         }
 
+        Add(nameof(q.Environment), q.Environment);
         Add(nameof(q.UserContains), q.UserContains);
         Add(nameof(q.ObjectContains), q.ObjectContains);
         Add(nameof(q.Operation), q.Operation);
@@ -139,6 +180,7 @@ public static class OperationNames
     {
         (nameof(ReportOperation.Delete), "Silme"),
         (nameof(ReportOperation.Archive), "Arşive taşıma"),
+        (nameof(ReportOperation.BackupMove), "Toplu yedekleme (TXT)"),
     };
 
     public static string Get(string? operation) => operation switch
@@ -146,6 +188,7 @@ public static class OperationNames
         nameof(ReportOperation.Delete) => "Silme",
         nameof(ReportOperation.Archive) => "Arşive taşıma",
         nameof(ReportOperation.DeleteInstance) => "Instance silme",
+        nameof(ReportOperation.BackupMove) => "Toplu yedekleme (TXT)",
         _ => operation ?? string.Empty
     };
 

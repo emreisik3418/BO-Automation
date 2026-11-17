@@ -1,4 +1,5 @@
 @inject ICurrentUser CurrentUser
+@inject BoAdmin.Web.Infrastructure.CurrentEnvironmentAccessor CurrentEnvironment
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -15,16 +16,21 @@
                 <a class="navbar-brand fw-semibold" asp-controller="Home" asp-action="Index">BO Yönetim</a>
                 @if (CurrentUser.IsAuthenticated)
                 {
-                    <span class="navbar-text text-white small">
-                        @CurrentUser.DisplayName
-                        <span class="opacity-75">(@CurrentUser.Sicil)</span>
-                    </span>
+                    <div class="d-flex align-items-center gap-3">
+                        @await Component.InvokeAsync("EnvironmentSelector")
+                        <span class="navbar-text text-white small">
+                            @CurrentUser.DisplayName
+                            <span class="opacity-75">(@CurrentUser.Sicil)</span>
+                        </span>
+                    </div>
                 }
             </div>
         </nav>
 
         @if (CurrentUser.IsAuthenticated)
         {
+            @* Aktif ortam rengiyle ince şerit: PROD'da kırmızı *@
+            <div class="env-strip bg-@CurrentEnvironment.Color"></div>
             <div class="bg-white border-bottom">
                 <div class="container-fluid">
                     @await Component.InvokeAsync("ModuleTabs")

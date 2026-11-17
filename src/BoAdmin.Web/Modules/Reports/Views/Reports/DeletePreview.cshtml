@@ -1,4 +1,5 @@
 @model DeletePreviewViewModel
+@inject BoAdmin.Web.Infrastructure.CurrentEnvironmentAccessor CurrentEnvironment
 @{
     ViewData["Title"] = "Silme Önizleme";
     var p = Model.Preview;
@@ -6,7 +7,10 @@
 
 <partial name="_ReportsNav" model="@("Search")" />
 
-<h1 class="h5 mb-3">Silme önizleme</h1>
+<h1 class="h5 mb-3">
+    Silme önizleme
+    <span class="badge text-bg-@CurrentEnvironment.Color align-middle ms-1">@CurrentEnvironment.DisplayName</span>
+</h1>
 
 @if (Model.ErrorMessage is not null)
 {
@@ -66,6 +70,7 @@ else
     </div>
 
     <form method="post" asp-action="Delete" id="deleteForm" class="card card-body shadow-sm">
+        <input type="hidden" name="Environment" value="@CurrentEnvironment.Key" />
         @foreach (var item in p.Items)
         {
             <input type="hidden" name="SelectedIds" value="@item.Report.Id" />
@@ -119,6 +124,10 @@ else
         }
 
         <div class="alert alert-warning small" id="deleteWarning">Kalıcı silme geri alınamaz.</div>
+        @if (CurrentEnvironment.IsCritical)
+        {
+            <div class="alert alert-danger small fw-semibold">Dikkat: İşlem @CurrentEnvironment.DisplayName ortamında yapılacak.</div>
+        }
 
         <div class="d-flex gap-2">
             <button type="submit" class="btn btn-danger" id="confirmBtn" disabled="@Model.IsMulti">Onayla ve sil</button>

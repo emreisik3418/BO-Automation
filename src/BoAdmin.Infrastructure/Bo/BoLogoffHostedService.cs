@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 namespace BoAdmin.Infrastructure.Bo;
 
 /// <summary>
-/// Uygulama kapanırken (IIS app pool recycle/stop dahil) açık BO oturumunu /logoff ile kapatır.
+/// Uygulama kapanırken (IIS app pool recycle/stop dahil) tüm ortamlardaki açık BO oturumlarını /logoff ile kapatır.
 /// </summary>
 public sealed class BoLogoffHostedService : IHostedService
 {
@@ -28,7 +28,7 @@ public sealed class BoLogoffHostedService : IHostedService
 
         try
         {
-            await _session.LogoffAsync(timeout.Token);
+            await _session.LogoffAllAsync(timeout.Token);
         }
         catch (Exception ex)
         {
