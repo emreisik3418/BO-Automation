@@ -1,4 +1,6 @@
 using System.Net;
+using System.Net.Http.Headers;
+using System.Text;
 using System.Net.Http.Json;
 using System.Text.Json;
 using BoAdmin.Application.Common;
@@ -105,6 +107,18 @@ public sealed class BoRestClient
     public Task<JsonElement> GetJsonAsync(string path, CancellationToken ct = default) =>
         SendForJsonAsync(HttpMethod.Get, path, null, ct);
 
+    /// <summary>
+    /// XML gövdeli POST (yanıt yine JSON beklenir). Bazı Raylight uç noktaları (ör. belge kopyalama)
+    /// JSON gövdeyi yok sayıp varsayılan değerlerle çalışıyor; bunlar için XML gönderilir.
+    /// Content-Type'a charset eklenmez: "application/xml".
+    /// </summary>
+    public Task<JsonElement> PostXmlAsync(string path, string xml, CancellationToken ct = default)
+    {
+        var content = new ByteArrayContent(new UTF8Encoding(false).GetBytes(xml));
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/xml");
+        return SendForJsonAsync(HttpMethod.Post, path, content, ct);
+    }
+
     public Task<JsonElement> PostJsonAsync(string path, object body, CancellationToken ct = default) =>
         SendForJsonAsync(HttpMethod.Post, path, body, ct);
 
@@ -124,7 +138,9 @@ public sealed class BoRestClient
 
         using var request = new HttpRequestMessage(method, BoUrl.Combine(env.BaseUrl, path));
         request.Options.Set(BoLogonTokenHandler.EnvironmentKey, environment);
-        if (body is not null)
+        if (body is HttpContent rawContent)
+            request.Content = rawContent;
+        else if (body is not null)
             request.Content = JsonContent.Create(body, body.GetType());
 
         HttpResponseMessage response;

@@ -253,8 +253,11 @@ public sealed class BoReportGateway : IBoReportGateway
             ?? throw new BoNotFoundException($"Rapor bulunamadı: {id}");
         var name = original.GetString("SI_NAME") ?? $"Rapor_{id}";
 
-        await _client.PostJsonAsync($"raylight/v1/documents?sourceId={id}",
-            new { document = new { name, folderId = targetFolderId } }, ct);
+        var body = new System.Xml.Linq.XElement("document",
+                new System.Xml.Linq.XElement("name", name),
+                new System.Xml.Linq.XElement("folderId", targetFolderId))
+            .ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        await _client.PostXmlAsync($"raylight/v1/documents?sourceId={id}", body, ct);
 
         // Kopyanın oluştuğunu doğrula
         var copyQuery = "SELECT SI_ID FROM CI_INFOOBJECTS " +
@@ -274,7 +277,7 @@ public sealed class BoReportGateway : IBoReportGateway
     /// <summary>
     /// Web Intelligence raporunu hedef klasöre yeni adla kopyalar (Raylight):
     ///   POST /raylight/v1/documents?sourceId={id}
-    ///   { "document": { "name": "...", "folderId": 123 } }      (doğrulanmalı)
+    ///   &lt;document&gt;&lt;name&gt;...&lt;/name&gt;&lt;folderId&gt;123&lt;/folderId&gt;&lt;/document&gt;  (XML gövde)
     /// Kopyanın oluştuğu CMS sorgusuyla doğrulanır. Kopya yeni ID/CUID alır;
     /// instance'lar ve zamanlamalar kopyalanmaz.
     /// </summary>
@@ -292,9 +295,16 @@ public sealed class BoReportGateway : IBoReportGateway
         if (!ReportKinds.IsCopyable(kind))
             throw new AppValidationException($"{ReportKinds.GetDisplayName(kind)} raporları REST ile kopyalanamıyor.");
 
+        // JSON gövde BO tarafından yok sayılıyor (kopya varsayılan adla, kaynak klasöre oluşuyor);
+        // SAP örneğindeki XML gövde kullanılır:
+        //   <document><name>...</name><folderId>123</folderId></document>
         // Yanıt: { "success": { "message": "... has been successfully created.", "id": "72705341" } }
-        var response = await _client.PostJsonAsync($"raylight/v1/documents?sourceId={sourceId}",
-            new { document = new { name = newName, folderId = targetFolderId } }, ct);
+        var body = new System.Xml.Linq.XElement("document",
+                new System.Xml.Linq.XElement("name", newName),
+                new System.Xml.Linq.XElement("folderId", targetFolderId))
+            .ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+
+        var response = await _client.PostXmlAsync($"raylight/v1/documents?sourceId={sourceId}", body, ct);
 
         var newId = TryReadCreatedId(response);
         _logger.LogInformation("Raylight kopyalama yanıtı: yeni ID {NewId}", newId?.ToString() ?? "(okunamadı)");
@@ -334,8 +344,14 @@ public sealed class BoReportGateway : IBoReportGateway
         var copyName = created.GetString("SI_NAME") ?? newName;
 
         if (parent != targetFolderId)
+        {
+            // Yanlış yere oluşan kopyayı geri al (bu işlemde biz oluşturduk, ID BO yanıtından geldi)
+            var rolledBack = await TryDeleteStrayCopyAsync(copyId, sourceId, parent ?? 0, ct);
             throw new BoOperationException(
-                $"Kopya oluşturuldu (ID: {copyId}) ancak yedek klasöründe değil (bulunduğu klasör ID: {parent}). Orijinal rapor silinmedi.");
+                $"Kopya oluşturuldu (ID: {copyId}, ad: '{copyName}') ancak yedek klasörüne değil, klasör {parent} içine konuldu. " +
+                (rolledBack ? "Hatalı kopya geri silindi. " : $"Hatalı kopya silinemedi, lütfen elle silin (ID: {copyId}). ") +
+                "Orijinal rapor silinmedi.");
+        }
 
         if (!string.Equals(copyName, newName, StringComparison.Ordinal))
             _logger.LogWarning("Kopyanın adı istenenden farklı. İstenen: '{Requested}', BO: '{Actual}'", newName, copyName);
@@ -344,6 +360,22 @@ public sealed class BoReportGateway : IBoReportGateway
             sourceId, copyId, copyName, targetFolderId);
 
         return new CopyResult(copyId, created.GetString("SI_CUID"), copyName, false);
+    }
+
+    private async Task<bool> TryDeleteStrayCopyAsync(int copyId, int sourceId, int parentId, CancellationToken ct)
+    {
+        if (copyId <= 0 || copyId == sourceId) return false;
+        try
+        {
+            await DeleteObjectAsync(copyId, ReportKinds.Webi, parentId, ct);
+            _logger.LogWarning("Yanlış klasöre oluşan kopya geri silindi: {CopyId} (kaynak {SourceId})", copyId, sourceId);
+            return true;
+        }
+        catch (Exception ex) when (ex is BoException or AppValidationException)
+        {
+            _logger.LogError(ex, "Yanlış klasöre oluşan kopya silinemedi: {CopyId} (kaynak {SourceId})", copyId, sourceId);
+            return false;
+        }
     }
 
     /// <summary>
