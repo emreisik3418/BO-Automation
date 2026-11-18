@@ -73,16 +73,23 @@ public sealed class BoEnvironmentOptions
     /// <summary>Public Folders kökünün SI_ID'si (standart kurulumda 23).</summary>
     public int RootFolderId { get; set; } = 23;
 
-    public BoDeleteStrategy DeleteStrategy { get; set; } = BoDeleteStrategy.InfoObjects;
+    public BoDeleteStrategy DeleteStrategy { get; set; } = BoDeleteStrategy.Documents;
 
     public BoMoveStrategy MoveStrategy { get; set; } = BoMoveStrategy.InfoObjects;
 
     // "Authorization" alt bölümü Web katmanında (ModuleAuthorizationOptions) okunur.
 }
 
+/// <summary>
+/// İlk denenecek silme uç noktası. Seçilen uç nokta 404 dönerse diğerleri sırayla denenir
+/// ve çalışan uç nokta ortam bazında hatırlanır.
+/// </summary>
 public enum BoDeleteStrategy
 {
-    /// <summary>DELETE /v1/infoobjects/{id} (doğrulanmalı)</summary>
+    /// <summary>DELETE /v1/documents/{id}</summary>
+    Documents,
+
+    /// <summary>DELETE /v1/infoobjects/{id}</summary>
     InfoObjects,
 
     /// <summary>DELETE /raylight/v1/documents/{id} (yalnızca Webi)</summary>

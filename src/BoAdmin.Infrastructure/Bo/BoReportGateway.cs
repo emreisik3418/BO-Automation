@@ -171,29 +171,68 @@ public sealed class BoReportGateway : IBoReportGateway
     // Silme
     // ------------------------------------------------------------------
 
+    /// <summary>Ortam bazında çalıştığı görülen silme uç noktası (gereksiz 404 denemelerini önler).</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, BoDeleteStrategy> WorkingDeleteStrategy =
+        new(StringComparer.OrdinalIgnoreCase);
+
     public async Task<DeleteOutcome> DeleteObjectAsync(int id, string kind, int parentId, CancellationToken ct = default)
     {
-        var strategy = Env.DeleteStrategy;
+        var environment = _client.EnvironmentKey;
+        var isWebi = string.Equals(kind, ReportKinds.Webi, StringComparison.OrdinalIgnoreCase);
 
-        switch (strategy)
+        // Deneme sırası: daha önce çalışan -> config'teki -> diğerleri
+        var order = new List<BoDeleteStrategy>();
+        if (WorkingDeleteStrategy.TryGetValue(environment, out var known)) order.Add(known);
+        order.Add(Env.DeleteStrategy);
+        order.AddRange(new[] { BoDeleteStrategy.Documents, BoDeleteStrategy.InfoObjects, BoDeleteStrategy.Raylight });
+        order = order.Distinct().Where(s => s != BoDeleteStrategy.Raylight || isWebi).ToList();
+
+        BoNotFoundException? lastNotFound = null;
+        BoDeleteStrategy? used = null;
+
+        foreach (var strategy in order)
         {
-            case BoDeleteStrategy.Raylight:
-                if (!string.Equals(kind, ReportKinds.Webi, StringComparison.OrdinalIgnoreCase))
-                    throw new AppValidationException("Raylight silme yöntemi yalnızca Web Intelligence raporlarını destekler.");
-                await _client.DeleteAsync($"raylight/v1/documents/{id}", ct);
-                break;
+            var path = strategy switch
+            {
+                BoDeleteStrategy.Documents => $"v1/documents/{id}",
+                BoDeleteStrategy.Raylight => $"raylight/v1/documents/{id}",
+                _ => $"v1/infoobjects/{id}"
+            };
 
-            default:
-                // doğrulanmalı: DELETE /v1/infoobjects/{id}
-                await _client.DeleteAsync($"v1/infoobjects/{id}", ct);
+            try
+            {
+                await _client.DeleteAsync(path, ct);
+                used = strategy;
                 break;
+            }
+            catch (BoNotFoundException ex)
+            {
+                // Uç nokta yok ya da nesne zaten yok: sıradakini dene
+                _logger.LogInformation("Silme uç noktası 404 döndü: DELETE {Path}. Sıradaki deneniyor.", path);
+                lastNotFound = ex;
+            }
         }
+
+        if (used is null)
+        {
+            // Hiçbir uç nokta silemedi: nesne gerçekten yok mu?
+            if (await GetObjectAsync(id, ct) is null)
+            {
+                _logger.LogInformation("Nesne zaten yok: {Id}", id);
+                return DeleteOutcome.Deleted;
+            }
+
+            throw lastNotFound ?? new BoNotFoundException($"Silme uç noktası bulunamadı: {id}");
+        }
+
+        WorkingDeleteStrategy[environment] = used.Value;
+        var strategyUsed = used.Value;
 
         // Doğrulama
         var after = await GetObjectAsync(id, ct);
         if (after is null)
         {
-            _logger.LogInformation("Nesne silindi: {Id} ({Strategy})", id, strategy);
+            _logger.LogInformation("Nesne silindi: {Id} ({Strategy})", id, strategyUsed);
             return DeleteOutcome.Deleted;
         }
 
@@ -205,7 +244,7 @@ public sealed class BoReportGateway : IBoReportGateway
         }
 
         throw new BoOperationException(
-            "Silme isteği başarılı döndü ancak nesne hâlâ BO'da duruyor. Ortamın 'DeleteStrategy' ayarını kontrol edin.");
+            $"Silme isteği başarılı döndü ancak nesne hâlâ BO'da duruyor ({strategyUsed}).");
     }
 
     // ------------------------------------------------------------------

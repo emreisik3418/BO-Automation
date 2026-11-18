@@ -65,7 +65,7 @@ prod'da `D:\Logs\BoAdmin\audit`. IIS app pool kimliğine bu klasörde **Modify**
 | `Environments:{ORTAM}:AuthType` | `secEnterprise` / `secWinAD` / `secLDAP` |
 | `Environments:{ORTAM}:RootFolderId` | Public Folders kökünün `SI_ID`'si (standart: 23) |
 | `Environments:{ORTAM}:ArchiveFolderId` | "Kurtarılabilir silme" arşiv klasörünün `SI_ID`'si (0 = kapalı) |
-| `Environments:{ORTAM}:DeleteStrategy` | `InfoObjects` (`DELETE /v1/infoobjects/{id}`) veya `Raylight` (yalnızca Webi) |
+| `Environments:{ORTAM}:DeleteStrategy` | İlk denenecek silme uç noktası: `Documents` (`DELETE /v1/documents/{id}`), `InfoObjects` veya `Raylight`. 404 dönerse diğerleri otomatik denenir |
 | `Environments:{ORTAM}:MoveStrategy` | `InfoObjects` (`PUT /v1/infoobjects/{id}`) veya `Raylight` |
 | `Environments:{ORTAM}:Authorization` | Modül bazlı `AllowedUsers` / `AllowedGroups` |
 
