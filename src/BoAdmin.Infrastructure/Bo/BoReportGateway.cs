@@ -297,7 +297,25 @@ public sealed class BoReportGateway : IBoReportGateway
             new { document = new { name = newName, folderId = targetFolderId } }, ct);
 
         var newId = TryReadCreatedId(response);
-        CmsEntry? created = newId is > 0 ? await GetObjectAsync(newId.Value, ct) : null;
+        _logger.LogInformation("Raylight kopyalama yanıtı: yeni ID {NewId}", newId?.ToString() ?? "(okunamadı)");
+
+        CmsEntry? created = null;
+        if (newId is > 0)
+        {
+            // Yeni nesne CMS sorgusuna birkaç saniye geç yansıyabilir: kısa aralıklarla tekrar dene
+            for (var attempt = 1; attempt <= 4 && created is null; attempt++)
+            {
+                created = await GetObjectAsync(newId.Value, ct);
+                if (created is null)
+                {
+                    _logger.LogDebug("Kopya ({NewId}) CMS sorgusunda henüz yok, deneme {Attempt}", newId, attempt);
+                    await Task.Delay(TimeSpan.FromMilliseconds(500 * attempt), ct);
+                }
+            }
+
+            // Hâlâ yoksa doğrudan Raylight'tan oku
+            created ??= await GetRaylightDocumentAsync(newId.Value, ct);
+        }
 
         // Yanıtta ID yoksa ada göre ara (yedek yöntem)
         if (created is null)
@@ -326,6 +344,48 @@ public sealed class BoReportGateway : IBoReportGateway
             sourceId, copyId, copyName, targetFolderId);
 
         return new CopyResult(copyId, created.GetString("SI_CUID"), copyName, false);
+    }
+
+    /// <summary>
+    /// GET /raylight/v1/documents/{id} -> { "document": { "id", "cuid", "name", "folderId", ... } }
+    /// CMS sorgusu sonucu gibi kullanılabilsin diye SI_* alanlarına çevrilir.
+    /// </summary>
+    private async Task<CmsEntry?> GetRaylightDocumentAsync(int id, CancellationToken ct)
+    {
+        try
+        {
+            var json = await _client.GetJsonAsync($"raylight/v1/documents/{id}", ct);
+            if (json.ValueKind != System.Text.Json.JsonValueKind.Object
+                || !json.TryGetProperty("document", out var doc)
+                || doc.ValueKind != System.Text.Json.JsonValueKind.Object)
+                return null;
+
+            string? Read(string name)
+            {
+                foreach (var p in doc.EnumerateObject())
+                {
+                    if (!string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)) continue;
+                    return p.Value.ValueKind == System.Text.Json.JsonValueKind.String ? p.Value.GetString() : p.Value.GetRawText();
+                }
+                return null;
+            }
+
+            var mapped = System.Text.Json.JsonSerializer.SerializeToElement(new Dictionary<string, string?>
+            {
+                ["SI_ID"] = Read("id") ?? id.ToString(),
+                ["SI_CUID"] = Read("cuid"),
+                ["SI_NAME"] = Read("name"),
+                ["SI_PARENTID"] = Read("folderId")
+            });
+
+            _logger.LogInformation("Kopya Raylight'tan okundu: {Json}", doc.GetRawText());
+            return new CmsEntry(mapped);
+        }
+        catch (BoException ex)
+        {
+            _logger.LogWarning(ex, "Kopya Raylight'tan okunamadı: {Id}", id);
+            return null;
+        }
     }
 
     /// <summary>Raylight yanıtından oluşturulan nesnenin ID'sini okur: success.id (metin veya sayı).</summary>
