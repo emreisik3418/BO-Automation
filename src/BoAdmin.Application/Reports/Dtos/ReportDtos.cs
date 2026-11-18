@@ -111,3 +111,14 @@ public sealed record BulkBackupPreviewDto(
     public IReadOnlyList<BulkPreviewItemDto> Processable => Items.Where(i => i.CanProcess).ToList();
     public IReadOnlyList<BulkPreviewItemDto> Skipped => Items.Where(i => !i.CanProcess).ToList();
 }
+
+/// <summary>Toplu işlemde tek raporun sonucu.</summary>
+public sealed record DeleteItemResult(
+    int ReportId,
+    string ReportName,
+    string? FolderPath,
+    ReportOperation Operation,
+    bool Success,
+    string Message,
+    int InstancesDeleted = 0,
+    int InstancesFailed = 0);
