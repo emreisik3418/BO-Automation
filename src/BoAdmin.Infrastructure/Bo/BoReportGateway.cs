@@ -282,7 +282,7 @@ public sealed class BoReportGateway : IBoReportGateway
         int sourceId, string sourceCuid, string kind, int targetFolderId, string newName, CancellationToken ct = default)
     {
         // Önceki bir çalıştırmada kopya oluşmuş ama orijinal silinememiş olabilir: yeniden kopyalama
-        var existing = await FindBackupCopyAsync(sourceCuid, targetFolderId, ct);
+        var existing = await FindBackupCopyByNameAsync(newName, sourceCuid, targetFolderId, ct);
         if (existing is not null)
         {
             _logger.LogInformation("Yedek kopya zaten var: kaynak {SourceId} -> {CopyId}", sourceId, existing.NewId);
@@ -292,36 +292,82 @@ public sealed class BoReportGateway : IBoReportGateway
         if (!ReportKinds.IsCopyable(kind))
             throw new AppValidationException($"{ReportKinds.GetDisplayName(kind)} raporları REST ile kopyalanamıyor.");
 
-        await _client.PostJsonAsync($"raylight/v1/documents?sourceId={sourceId}",
+        // Yanıt: { "success": { "message": "... has been successfully created.", "id": "72705341" } }
+        var response = await _client.PostJsonAsync($"raylight/v1/documents?sourceId={sourceId}",
             new { document = new { name = newName, folderId = targetFolderId } }, ct);
 
-        var copy = await FindBackupCopyAsync(sourceCuid, targetFolderId, ct)
-            ?? throw new BoOperationException(
-                "Kopyalama isteği başarılı döndü ancak kopya yedek klasöründe bulunamadı.");
+        var newId = TryReadCreatedId(response);
+        CmsEntry? created = newId is > 0 ? await GetObjectAsync(newId.Value, ct) : null;
+
+        // Yanıtta ID yoksa ada göre ara (yedek yöntem)
+        if (created is null)
+        {
+            var byName = await FindBackupCopyByNameAsync(newName, sourceCuid, targetFolderId, ct);
+            if (byName is not null)
+                created = await GetObjectAsync(byName.NewId, ct);
+        }
+
+        if (created is null)
+            throw new BoOperationException(
+                $"Kopyalama isteği başarılı döndü ancak kopya BO'da bulunamadı (yanıttaki ID: {newId?.ToString() ?? "yok"}).");
+
+        var copyId = created.GetInt("SI_ID") ?? 0;
+        var parent = created.GetInt("SI_PARENTID");
+        var copyName = created.GetString("SI_NAME") ?? newName;
+
+        if (parent != targetFolderId)
+            throw new BoOperationException(
+                $"Kopya oluşturuldu (ID: {copyId}) ancak yedek klasöründe değil (bulunduğu klasör ID: {parent}). Orijinal rapor silinmedi.");
+
+        if (!string.Equals(copyName, newName, StringComparison.Ordinal))
+            _logger.LogWarning("Kopyanın adı istenenden farklı. İstenen: '{Requested}', BO: '{Actual}'", newName, copyName);
 
         _logger.LogInformation("Rapor kopyalandı: {SourceId} -> {CopyId} '{Name}' (klasör {Folder})",
-            sourceId, copy.NewId, copy.NewName, targetFolderId);
+            sourceId, copyId, copyName, targetFolderId);
 
-        return copy;
+        return new CopyResult(copyId, created.GetString("SI_CUID"), copyName, false);
     }
 
-    /// <summary>Hedef klasörde adı "_{cuid}" ile biten (orijinalin kendisi olmayan) rapor.</summary>
-    private async Task<CopyResult?> FindBackupCopyAsync(string sourceCuid, int targetFolderId, CancellationToken ct)
+    /// <summary>Raylight yanıtından oluşturulan nesnenin ID'sini okur: success.id (metin veya sayı).</summary>
+    private static int? TryReadCreatedId(System.Text.Json.JsonElement response)
     {
-        var suffix = "_" + sourceCuid;
+        if (response.ValueKind != System.Text.Json.JsonValueKind.Object) return null;
+
+        foreach (var container in new[] { "success", "document" })
+        {
+            if (!response.TryGetProperty(container, out var node) || node.ValueKind != System.Text.Json.JsonValueKind.Object)
+                continue;
+
+            if (!node.TryGetProperty("id", out var idNode)) continue;
+
+            if (idNode.ValueKind == System.Text.Json.JsonValueKind.Number && idNode.TryGetInt32(out var n)) return n;
+            if (idNode.ValueKind == System.Text.Json.JsonValueKind.String && int.TryParse(idNode.GetString(), out n)) return n;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Hedef klasörde tam olarak bu adı taşıyan (orijinalin kendisi olmayan) rapor.
+    /// CMS sorgusu baştaki % joker karakterini desteklemediği için tam ad eşleşmesi kullanılır.
+    /// Ad sorguda güvenle yazılamayan karakter (' " \ ;) içeriyorsa arama yapılmaz.
+    /// </summary>
+    private async Task<CopyResult?> FindBackupCopyByNameAsync(string name, string sourceCuid, int targetFolderId, CancellationToken ct)
+    {
+        if (CmsQueryBuilder.Sanitize(name) != name) return null;
+
         var query = "SELECT SI_ID, SI_CUID, SI_NAME FROM CI_INFOOBJECTS " +
-                    $"WHERE SI_PARENTID = {targetFolderId} AND SI_INSTANCE = 0 " +
-                    $"AND SI_NAME LIKE '%{CmsQueryBuilder.Sanitize(sourceCuid)}'";
+                    $"WHERE SI_PARENTID = {targetFolderId} AND SI_INSTANCE = 0 AND SI_NAME = '{name}'";
 
-        var entries = await _client.CmsQueryAllAsync(query, pageSize: 50, maxPages: 2, ct: ct);
+        var result = await _client.CmsQueryAsync(query, 1, 10, ct);
 
-        var match = entries.FirstOrDefault(e =>
-            (e.GetString("SI_NAME") ?? string.Empty).EndsWith(suffix, StringComparison.Ordinal)
+        var match = result.Entries.FirstOrDefault(e =>
+            string.Equals(e.GetString("SI_NAME"), name, StringComparison.Ordinal)
             && !string.Equals(e.GetString("SI_CUID"), sourceCuid, StringComparison.Ordinal));
 
         return match is null
             ? null
-            : new CopyResult(match.GetInt("SI_ID") ?? 0, match.GetString("SI_CUID"), match.GetString("SI_NAME") ?? string.Empty, false);
+            : new CopyResult(match.GetInt("SI_ID") ?? 0, match.GetString("SI_CUID"), match.GetString("SI_NAME") ?? name, false);
     }
 
     // ------------------------------------------------------------------
@@ -354,7 +400,7 @@ public sealed class BoReportGateway : IBoReportGateway
     private async Task<CmsEntry?> GetObjectAsync(int id, CancellationToken ct)
     {
         var result = await _client.CmsQueryAsync(
-            $"SELECT SI_ID, SI_NAME, SI_PARENTID FROM CI_INFOOBJECTS WHERE SI_ID = {id}", 1, 1, ct);
+            $"SELECT SI_ID, SI_CUID, SI_NAME, SI_PARENTID FROM CI_INFOOBJECTS WHERE SI_ID = {id}", 1, 1, ct);
         return result.Entries.FirstOrDefault();
     }
 
