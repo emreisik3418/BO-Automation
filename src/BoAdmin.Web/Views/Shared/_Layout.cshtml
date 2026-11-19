@@ -4,7 +4,7 @@
 @inject ModuleRegistry Modules
 @{
     var controller = ViewContext.RouteData.Values["controller"]?.ToString();
-    var section = ViewData["Section"] as string
+    var sectionTitle = ViewData["Section"] as string
                   ?? Modules.FindByController(controller)?.Title
                   ?? (string.Equals(controller, "Home", StringComparison.OrdinalIgnoreCase) ? "Genel bakış" : null);
     var title = ViewData["Title"] as string;
@@ -76,9 +76,9 @@
                 <div class="topbar-titles">
                     @if (!hideHeader)
                     {
-                        if (section is not null)
+                        if (sectionTitle is not null)
                         {
-                            <div class="topbar-section">@section</div>
+                            <div class="topbar-section">@sectionTitle</div>
                         }
                         if (title is not null)
                         {
