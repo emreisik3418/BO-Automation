@@ -6,6 +6,8 @@ using BoAdmin.Application.Common.Exceptions;
 using BoAdmin.Application.Reports;
 using BoAdmin.Application.Reports.Dtos;
 using BoAdmin.Web.Authorization;
+using BoAdmin.Web.Infrastructure;
+using BoAdmin.Web.Infrastructure.Jobs;
 using BoAdmin.Web.Modules.Reports.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,8 +21,11 @@ namespace BoAdmin.Web.Modules.Reports;
 ///  GET  /Reports/DeletePreview  -> silme önizleme (yan etkisiz)
 ///  POST /Reports/Delete         -> silme / arşive taşıma
 ///  GET  /Reports/Bulk           -> TXT ile toplu yedekleme: dosya yükleme
-///  POST /Reports/BulkPreview    -> TXT önizleme
-///  POST /Reports/BulkExecute    -> yedek klasörüne kopyala ({ad}_{CUID}) + orijinali sil
+///  POST /Reports/BulkPreview    -> TXT önizleme (arka plan işi başlatır)
+///  POST /Reports/BulkExecute    -> yedek klasörüne kopyala ({ad}_{CUID}) + orijinali sil (arka plan işi)
+///  GET  /Reports/Job/{id}       -> ilerleme ekranı
+///  GET  /Reports/JobStatus/{id} -> ilerleme durumu (JSON, saniyede bir sorulur)
+///  GET  /Reports/JobResult/{id} -> iş bitince sonuç (önizleme veya sonuç sayfası)
 ///  GET  /Reports/History        -> İşlem Geçmişi
 ///  GET  /Reports/ExportHistory  -> İşlem Geçmişi CSV
 /// </summary>
@@ -33,18 +38,27 @@ public sealed class ReportsController : Controller
     private readonly IReportService _reports;
     private readonly IAuditLogService _audit;
     private readonly ICurrentEnvironment _environment;
+    private readonly CurrentEnvironmentAccessor _environmentAccessor;
     private readonly IModuleAccessService _accessService;
+    private readonly ICurrentUser _currentUser;
+    private readonly JobService _jobs;
 
     public ReportsController(
         IReportService reports,
         IAuditLogService audit,
         ICurrentEnvironment environment,
-        IModuleAccessService accessService)
+        CurrentEnvironmentAccessor environmentAccessor,
+        IModuleAccessService accessService,
+        ICurrentUser currentUser,
+        JobService jobs)
     {
         _reports = reports;
         _audit = audit;
         _environment = environment;
+        _environmentAccessor = environmentAccessor;
         _accessService = accessService;
+        _currentUser = currentUser;
+        _jobs = jobs;
     }
 
     // ------------------------------------------------------------------
@@ -192,40 +206,128 @@ public sealed class ReportsController : Controller
         using (var reader = new StreamReader(file.OpenReadStream(), Encoding.UTF8, detectEncodingFromByteOrderMarks: true))
             content = await reader.ReadToEndAsync(ct);
 
-        try
+        if (targetFolderId is not > 0)
         {
-            var preview = await _reports.PrepareBulkBackupAsync(content, targetFolderId ?? 0, ct);
-            return View(new BulkPreviewViewModel(preview) { FileName = Path.GetFileName(file.FileName) });
-        }
-        catch (AppValidationException ex)
-        {
-            form.ErrorMessage = ex.UserMessage;
+            form.ErrorMessage = "Lütfen geçerli bir yedek klasör ID'si girin.";
             return View("Bulk", form);
         }
-        catch (BoException ex)
-        {
-            form.ErrorMessage = ex.UserMessage;
-            return View("Bulk", form);
-        }
+
+        // Önizleme arka planda hazırlanır; kullanıcı ilerleme ekranına yönlendirilir
+        var fileName = Path.GetFileName(file.FileName);
+        var folderId = targetFolderId.Value;
+        var env = _environmentAccessor.Current;
+
+        var job = _jobs.Start("Toplu silme önizlemesi hazırlanıyor", _currentUser.UserName, _currentUser.DisplayName,
+            env, ReportService.BulkPreviewSteps,
+            async (sp, progress, jobCt) =>
+            {
+                var service = sp.GetRequiredService<IReportService>();
+                var preview = await service.PrepareBulkBackupAsync(content, folderId, progress, jobCt);
+                return new BulkPreviewViewModel(preview) { FileName = fileName, EnvironmentKey = env.Key };
+            });
+
+        return RedirectToAction(nameof(Job), new { id = job.Id });
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> BulkExecute(BulkExecuteModel model)
+    public IActionResult BulkExecute(BulkExecuteModel model)
     {
         if (!EnvironmentMatches(model.Environment, out var redirect, nameof(Bulk)))
             return redirect;
 
-        try
+        var ids = model.SelectedIds.Where(i => i > 0).Distinct().ToList();
+        if (ids.Count == 0 || model.ConfirmationCount != ids.Count)
         {
-            var results = await _reports.ExecuteBulkBackupAsync(model.SelectedIds, model.TargetFolderId, model.ConfirmationCount);
-            return View("DeleteResult", new DeleteResultViewModel(results, ReportOperation.BackupCopy));
-        }
-        catch (AppValidationException ex)
-        {
-            TempData["Warning"] = ex.UserMessage + " Lütfen dosyayı yeniden yükleyin.";
+            TempData["Warning"] = $"Onay için yazılan sayı ({model.ConfirmationCount}) işlenecek rapor sayısıyla ({ids.Count}) eşleşmiyor. Lütfen dosyayı yeniden yükleyin.";
             return RedirectToAction(nameof(Bulk));
         }
+
+        var folderId = model.TargetFolderId;
+        var confirmation = model.ConfirmationCount;
+
+        var job = _jobs.Start($"{ids.Count} rapor yedeklenip siliniyor", _currentUser.UserName, _currentUser.DisplayName,
+            _environmentAccessor.Current, ReportService.BulkExecuteSteps,
+            async (sp, progress, _) =>
+            {
+                var service = sp.GetRequiredService<IReportService>();
+                var results = await service.ExecuteBulkBackupAsync(ids, folderId, confirmation, progress);
+                return new DeleteResultViewModel(results, ReportOperation.BackupCopy);
+            });
+
+        return RedirectToAction(nameof(Job), new { id = job.Id });
+    }
+
+    // ------------------------------------------------------------------
+    // Arka plan işleri: ilerleme ekranı
+    // ------------------------------------------------------------------
+
+    [HttpGet("Reports/Job/{id:guid}")]
+    public IActionResult Job(Guid id)
+    {
+        var job = _jobs.Get(id, _currentUser.UserName);
+        if (job is null)
+        {
+            TempData["Warning"] = "İşlem bulunamadı veya süresi doldu. Sonuçları İşlem Geçmişi'nde görebilirsiniz.";
+            return RedirectToAction(nameof(Bulk));
+        }
+
+        return View(new JobViewModel(job.Id, job.Title, job.Environment,
+            Url.Action(nameof(JobStatus), new { id })!, Url.Action(nameof(JobResult), new { id })!,
+            Url.Action(nameof(Bulk))!));
+    }
+
+    [HttpGet("Reports/JobStatus/{id:guid}")]
+    public IActionResult JobStatus(Guid id)
+    {
+        var job = _jobs.Get(id, _currentUser.UserName);
+        if (job is null) return NotFound(new { error = "İşlem bulunamadı." });
+
+        var s = job.Snapshot();
+        return Json(new
+        {
+            state = s.State.ToString().ToLowerInvariant(),
+            title = s.Title,
+            step = s.Step,
+            stepCount = s.StepCount,
+            phase = s.Phase,
+            done = s.Done,
+            total = s.Total,
+            currentItem = s.CurrentItem,
+            success = s.SuccessCount,
+            fail = s.FailCount,
+            elapsed = Math.Round(s.ElapsedSeconds),
+            remaining = s.RemainingSeconds is null ? (double?)null : Math.Ceiling(s.RemainingSeconds.Value),
+            percent = s.Percent,
+            error = s.Error
+        });
+    }
+
+    [HttpGet("Reports/JobResult/{id:guid}")]
+    public IActionResult JobResult(Guid id)
+    {
+        var job = _jobs.Get(id, _currentUser.UserName);
+        if (job is null)
+        {
+            TempData["Warning"] = "İşlem bulunamadı veya süresi doldu. Sonuçları İşlem Geçmişi'nde görebilirsiniz.";
+            return RedirectToAction(nameof(Bulk));
+        }
+
+        if (job.State == JobState.Running)
+            return RedirectToAction(nameof(Job), new { id });
+
+        if (job.State == JobState.Failed)
+        {
+            TempData["Warning"] = job.Error;
+            return RedirectToAction(nameof(Bulk));
+        }
+
+        return job.Result switch
+        {
+            BulkPreviewViewModel preview => (IActionResult)View("BulkPreview", preview),
+            DeleteResultViewModel result => View("DeleteResult", result),
+            _ => RedirectToAction(nameof(Bulk))
+        };
     }
 
     // ------------------------------------------------------------------

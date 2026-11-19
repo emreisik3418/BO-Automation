@@ -147,6 +147,9 @@ public sealed class BulkPreviewViewModel
 
     public BulkBackupPreviewDto Preview { get; }
     public string? FileName { get; set; }
+
+    /// <summary>Önizlemenin hazırlandığı ortam (onay formunda geri gönderilir).</summary>
+    public string? EnvironmentKey { get; set; }
     public string? ErrorMessage { get; set; }
 
     /// <summary>Kopyalanıp silinecek raporlar.</summary>
@@ -155,6 +158,15 @@ public sealed class BulkPreviewViewModel
     /// <summary>İşleme alınmayacak raporlar (ör. Webi dışı türler).</summary>
     public IReadOnlyList<BulkPreviewItemDto> Skipped => Preview.Skipped;
 }
+
+/// <summary>Arka plan işinin ilerleme ekranı.</summary>
+public sealed record JobViewModel(
+    Guid Id,
+    string Title,
+    BoAdmin.Web.Infrastructure.EnvironmentInfo Environment,
+    string StatusUrl,
+    string ResultUrl,
+    string BackUrl);
 
 /// <summary>Toplu işlem onay formundan gelen veri.</summary>
 public sealed class BulkExecuteModel

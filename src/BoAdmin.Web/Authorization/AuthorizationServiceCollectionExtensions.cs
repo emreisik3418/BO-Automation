@@ -22,6 +22,10 @@ public static class AuthorizationServiceCollectionExtensions
         services.AddSingleton<EnvironmentCatalog>();
         services.AddSingleton<IModuleAccessService, ModuleAccessService>();
 
+        // Arka plan işleri (toplu önizleme / silme ilerleme çubuğu)
+        services.AddScoped<BackgroundJobContext>();
+        services.AddSingleton<BoAdmin.Web.Infrastructure.Jobs.JobService>();
+
         // Seçili ortam istek bazında çözülür
         services.AddScoped<CurrentEnvironmentAccessor>();
         services.AddScoped<ICurrentEnvironment>(sp => sp.GetRequiredService<CurrentEnvironmentAccessor>());

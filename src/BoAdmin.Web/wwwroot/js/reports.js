@@ -114,6 +114,91 @@
     });
 
     // ------------------------------------------------------------
+    // Uzun süren form gönderimleri: butonu kilitle, durum yazısı göster
+    // ------------------------------------------------------------
+    document.querySelectorAll('form[data-busy-form]').forEach(f => {
+        f.addEventListener('submit', () => {
+            const btn = f.querySelector('button[type="submit"]');
+            if (!btn) return;
+            setTimeout(() => {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span>' + (btn.dataset.busyText || 'Lütfen bekleyin...');
+            }, 0);
+        });
+    });
+
+    // ------------------------------------------------------------
+    // Arka plan işi: ilerleme ekranı (saniyede bir durum sorulur)
+    // ------------------------------------------------------------
+    const jobBox = document.getElementById('jobProgress');
+    if (jobBox) {
+        const el = name => jobBox.querySelector('[data-job="' + name + '"]');
+        const fmt = sec => {
+            sec = Math.max(0, Math.round(sec));
+            const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s2 = sec % 60;
+            const mm = String(m).padStart(2, '0'), ss = String(s2).padStart(2, '0');
+            return h > 0 ? h + ':' + mm + ':' + ss : mm + ':' + ss;
+        };
+        let failures = 0;
+
+        async function poll() {
+            let data;
+            try {
+                const res = await fetch(jobBox.dataset.statusUrl, { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
+                if (res.status === 404) { showError('İşlem bulunamadı veya süresi doldu.'); return; }
+                data = await res.json();
+                failures = 0;
+            } catch {
+                // Geçici ağ hatası: birkaç kez daha dene
+                if (++failures > 10) { showError('Sunucuya ulaşılamıyor. Sonucu İşlem Geçmişi\'nden kontrol edin.'); return; }
+                setTimeout(poll, 2000);
+                return;
+            }
+
+            el('step').textContent = 'Adım ' + data.step + ' / ' + data.stepCount;
+            el('phase').textContent = data.phase;
+            el('fill').style.width = data.percent + '%';
+            el('bar').setAttribute('aria-valuenow', data.percent);
+            el('percent').textContent = '%' + data.percent;
+            el('count').textContent = data.total > 0 ? data.done + ' / ' + data.total : '';
+            el('elapsed').textContent = fmt(data.elapsed);
+            el('remaining').textContent = data.state === 'completed' ? '00:00'
+                : data.remaining != null ? '~ ' + fmt(data.remaining) : 'hesaplanıyor';
+            el('success').textContent = data.success;
+            el('fail').textContent = data.fail;
+            el('fail').classList.toggle('text-danger', data.fail > 0);
+            el('bar').classList.toggle('is-indeterminate', data.total === 0 && data.state === 'running');
+
+            const wrap = el('current-wrap');
+            wrap.hidden = !data.currentItem || data.state !== 'running';
+            if (data.currentItem) el('current').textContent = data.currentItem;
+
+            if (data.state === 'completed') {
+                jobBox.classList.add('is-done');
+                el('phase').textContent = 'Tamamlandı, sonuç açılıyor...';
+                setTimeout(() => { window.location.href = jobBox.dataset.resultUrl; }, 600);
+                return;
+            }
+            if (data.state === 'failed') { showError(data.error || 'İşlem tamamlanamadı.'); return; }
+
+            setTimeout(poll, 1000);
+        }
+
+        function showError(message) {
+            jobBox.classList.add('is-failed');
+            const box = el('error');
+            box.textContent = message;
+            box.hidden = false;
+            el('actions').hidden = false;
+            el('current-wrap').hidden = true;
+            el('remaining').textContent = '-';
+            el('bar').classList.remove('is-indeterminate');
+        }
+
+        poll();
+    }
+
+    // ------------------------------------------------------------
     // Silme / toplu silme önizleme: işlem türü + sayı ile onay
     // ------------------------------------------------------------
     const form = document.getElementById('deleteForm') || document.getElementById('bulkForm');

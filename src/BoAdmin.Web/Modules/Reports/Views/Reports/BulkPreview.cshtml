@@ -144,7 +144,7 @@ else
 
     @* ---------------- Onay ---------------- *@
     <form method="post" asp-action="BulkExecute" id="bulkForm" class="card card-body">
-        <input type="hidden" name="Environment" value="@CurrentEnvironment.Key" />
+        <input type="hidden" name="Environment" value="@(Model.EnvironmentKey ?? CurrentEnvironment.Key)" />
         <input type="hidden" name="TargetFolderId" value="@p.TargetFolder.Id" />
         @foreach (var item in toProcess)
         {

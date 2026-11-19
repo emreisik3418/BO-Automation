@@ -27,13 +27,15 @@ public interface IReportService
     Task<IReadOnlyList<DeleteItemResult>> DeleteAsync(IReadOnlyCollection<int> reportIds, DeleteOptions options);
 
     /// <summary>TXT içeriğindeki CUID'leri çözer, hedef klasörü doğrular ve önizleme döndürür.</summary>
-    Task<BulkBackupPreviewDto> PrepareBulkBackupAsync(string fileContent, int targetFolderId, CancellationToken ct = default);
+    Task<BulkBackupPreviewDto> PrepareBulkBackupAsync(string fileContent, int targetFolderId,
+        IOperationProgress? progress = null, CancellationToken ct = default);
 
     /// <summary>
     /// Her raporu yedek klasörüne "{ad}_{CUID}" adıyla kopyalar, kopya doğrulanınca orijinali siler.
     /// Her rapor ayrı işlenir ve audit'e yazılır.
     /// </summary>
-    Task<IReadOnlyList<DeleteItemResult>> ExecuteBulkBackupAsync(IReadOnlyCollection<int> reportIds, int targetFolderId, int confirmationCount);
+    Task<IReadOnlyList<DeleteItemResult>> ExecuteBulkBackupAsync(IReadOnlyCollection<int> reportIds, int targetFolderId, int confirmationCount,
+        IOperationProgress? progress = null);
 }
 
 public sealed class ReportService : IReportService
@@ -153,8 +155,20 @@ public sealed class ReportService : IReportService
     // TXT ile toplu yedekleme: kopyala ({ad}_{CUID}) + orijinali sil
     // ------------------------------------------------------------------
 
-    public async Task<BulkBackupPreviewDto> PrepareBulkBackupAsync(string fileContent, int targetFolderId, CancellationToken ct = default)
+    /// <summary>Önizleme adım sayısı (ilerleme çubuğu için).</summary>
+    public const int BulkPreviewSteps = 4;
+
+    /// <summary>Toplu yedekleme adım sayısı (ilerleme çubuğu için).</summary>
+    public const int BulkExecuteSteps = 2;
+
+    private const int LookupChunkSize = 100;
+
+    public async Task<BulkBackupPreviewDto> PrepareBulkBackupAsync(string fileContent, int targetFolderId,
+        IOperationProgress? progress = null, CancellationToken ct = default)
     {
+        progress ??= NullOperationProgress.Instance;
+
+        progress.Phase("CUID listesi okunuyor");
         var parsed = CuidListParser.Parse(fileContent ?? string.Empty);
 
         if (parsed.Cuids.Count == 0)
@@ -164,10 +178,22 @@ public sealed class ReportService : IReportService
             throw new AppValidationException(
                 $"Tek seferde en fazla {MaxBulkSize} CUID işlenebilir. Dosyada: {parsed.Cuids.Count}. Lütfen dosyayı bölün.");
 
+        progress.Phase("Yedek klasörü kontrol ediliyor");
         var folder = await GetTargetFolderAsync(targetFolderId, ct);
 
-        var reports = await _gateway.GetReportsByCuidsAsync(parsed.Cuids, ct);
-        var withCounts = await WithInstanceCountsAsync(reports, ct);
+        // CUID'ler 100'lük gruplar halinde aranır; her grup bir ilerleme adımı
+        var cuidChunks = parsed.Cuids.Chunk(LookupChunkSize).ToList();
+        progress.Phase("Raporlar BO'da aranıyor", parsed.Cuids.Count);
+
+        var reports = new List<ReportListItemDto>();
+        foreach (var chunk in cuidChunks)
+        {
+            reports.AddRange(await _gateway.GetReportsByCuidsAsync(chunk, ct));
+            for (var i = 0; i < chunk.Length; i++) progress.Step();
+        }
+
+        progress.Phase("Instance sayıları alınıyor", reports.Count);
+        var withCounts = await WithInstanceCountsAsync(reports, ct, progress);
 
         var items = withCounts.Select(i =>
         {
@@ -191,13 +217,17 @@ public sealed class ReportService : IReportService
     }
 
     public async Task<IReadOnlyList<DeleteItemResult>> ExecuteBulkBackupAsync(
-        IReadOnlyCollection<int> reportIds, int targetFolderId, int confirmationCount)
+        IReadOnlyCollection<int> reportIds, int targetFolderId, int confirmationCount, IOperationProgress? progress = null)
     {
+        progress ??= NullOperationProgress.Instance;
+
         var ids = ValidateIds(reportIds, MaxBulkSize);
         ValidateConfirmation(confirmationCount, ids.Count);
 
+        progress.Phase("Raporlar ve yedek klasörü doğrulanıyor");
         var folder = await GetTargetFolderAsync(targetFolderId, CancellationToken.None);
-        return await RunBatchAsync(ids, ReportOperation.BackupCopy, deleteInstances: false, folder);
+        return await RunBatchAsync(ids, ReportOperation.BackupCopy, deleteInstances: false, folder, progress,
+            "Raporlar yedekleniyor ve siliniyor");
     }
 
     /// <summary>Yedek kopyanın adı: "{orijinal ad}_{orijinal CUID}". Uzunsa orijinal ad kısaltılır, CUID korunur.</summary>
@@ -224,8 +254,11 @@ public sealed class ReportService : IReportService
     // ------------------------------------------------------------------
 
     private async Task<IReadOnlyList<DeleteItemResult>> RunBatchAsync(
-        List<int> ids, ReportOperation operation, bool deleteInstances, FolderDto? targetFolder)
+        List<int> ids, ReportOperation operation, bool deleteInstances, FolderDto? targetFolder,
+        IOperationProgress? progress = null, string? phaseTitle = null)
     {
+        progress ??= NullOperationProgress.Instance;
+
         // Toplu işlem kullanıcı tarayıcıyı kapatsa bile yarıda kalmasın diye
         // istek iptal token'ı kullanılmaz.
         var ct = CancellationToken.None;
@@ -238,12 +271,15 @@ public sealed class ReportService : IReportService
         // Güvenlik: yalnızca gerçekten rapor olan nesneleri işle (POST edilen ID'ye güvenme)
         var reports = (await _gateway.GetReportsByIdsAsync(ids, ct)).ToDictionary(r => r.Id);
 
+        progress.Phase(phaseTitle ?? "Raporlar işleniyor", ids.Count);
+
         var results = new List<DeleteItemResult>(ids.Count);
         foreach (var id in ids)
         {
             DeleteItemResult result;
             if (reports.TryGetValue(id, out var report))
             {
+                progress.Current(report.Name);
                 result = operation == ReportOperation.BackupCopy
                     ? await ProcessBackupCopyAsync(report, targetFolder!, ct)
                     : await ProcessOneAsync(report, operation, deleteInstances, targetFolder, ct);
@@ -256,6 +292,7 @@ public sealed class ReportService : IReportService
 
             results.Add(result);
             await WriteAuditAsync(result, report, targetFolder, batchId);
+            progress.Step(result.ReportName, result.Success);
         }
 
         _logger.LogInformation("Toplu işlem bitti. Batch: {BatchId}, Başarılı: {Ok}, Başarısız: {Fail}",
@@ -418,9 +455,16 @@ public sealed class ReportService : IReportService
 
     // ------------------------------------------------------------------
 
-    private async Task<List<DeletePreviewItemDto>> WithInstanceCountsAsync(IReadOnlyList<ReportListItemDto> reports, CancellationToken ct)
+    private async Task<List<DeletePreviewItemDto>> WithInstanceCountsAsync(
+        IReadOnlyList<ReportListItemDto> reports, CancellationToken ct, IOperationProgress? progress = null)
     {
-        var counts = await _gateway.GetInstanceCountsAsync(reports.Select(r => r.Id).ToList(), ct);
+        var counts = new Dictionary<int, int>();
+        foreach (var chunk in reports.Select(r => r.Id).Chunk(LookupChunkSize))
+        {
+            foreach (var (id, count) in await _gateway.GetInstanceCountsAsync(chunk, ct))
+                counts[id] = count;
+            for (var i = 0; i < chunk.Length; i++) progress?.Step();
+        }
 
         return reports
             .OrderBy(r => r.FolderPath).ThenBy(r => r.Name)

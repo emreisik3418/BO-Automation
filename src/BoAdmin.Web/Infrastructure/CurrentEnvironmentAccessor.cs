@@ -21,11 +21,15 @@ public sealed class CurrentEnvironmentAccessor : ICurrentEnvironment
 
     private EnvironmentInfo? _resolved;
 
+    private readonly BackgroundJobContext _job;
+
     public CurrentEnvironmentAccessor(
         IHttpContextAccessor httpContextAccessor,
         EnvironmentCatalog catalog,
-        IModuleAccessService accessService)
+        IModuleAccessService accessService,
+        BackgroundJobContext job)
     {
+        _job = job;
         _httpContextAccessor = httpContextAccessor;
         _catalog = catalog;
         _accessService = accessService;
@@ -53,6 +57,10 @@ public sealed class CurrentEnvironmentAccessor : ICurrentEnvironment
 
     private EnvironmentInfo Resolve()
     {
+        // Arka plan işi: iş başlatılırken seçili olan ortam
+        if (_job.Environment is not null)
+            return _job.Environment;
+
         var fallback = _catalog.Find(_catalog.DefaultKey)
             ?? new EnvironmentInfo(string.Empty, "(ortam tanımlı değil)", "secondary");
 

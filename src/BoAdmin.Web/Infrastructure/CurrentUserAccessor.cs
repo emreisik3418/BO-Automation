@@ -14,23 +14,27 @@ public sealed class CurrentUserAccessor : ICurrentUser
 
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IMemoryCache _cache;
+    private readonly BackgroundJobContext _job;
     private readonly ILogger<CurrentUserAccessor> _logger;
 
     public CurrentUserAccessor(
         IHttpContextAccessor httpContextAccessor,
         IMemoryCache cache,
+        BackgroundJobContext job,
         ILogger<CurrentUserAccessor> logger)
     {
         _httpContextAccessor = httpContextAccessor;
         _cache = cache;
+        _job = job;
         _logger = logger;
     }
 
+    // Arka plan işinde işi başlatan kullanıcı kullanılır
     public bool IsAuthenticated =>
-        _httpContextAccessor.HttpContext?.User.Identity?.IsAuthenticated == true;
+        _job.IsActive || _httpContextAccessor.HttpContext?.User.Identity?.IsAuthenticated == true;
 
     public string UserName =>
-        _httpContextAccessor.HttpContext?.User.Identity?.Name ?? string.Empty;
+        _job.IsActive ? _job.UserName! : _httpContextAccessor.HttpContext?.User.Identity?.Name ?? string.Empty;
 
     public string Sicil => AccountNameHelper.GetSamAccountName(UserName);
 
@@ -38,6 +42,8 @@ public sealed class CurrentUserAccessor : ICurrentUser
     {
         get
         {
+            if (_job.IsActive && !string.IsNullOrEmpty(_job.DisplayName)) return _job.DisplayName;
+
             var sicil = Sicil;
             if (string.IsNullOrEmpty(sicil)) return string.Empty;
 

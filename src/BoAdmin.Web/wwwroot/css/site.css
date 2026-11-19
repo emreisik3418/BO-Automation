@@ -813,3 +813,69 @@ a.sort-link:hover { color: var(--app-brand); }
 @media (prefers-reduced-motion: reduce) {
     .app-sidebar, .action-card, .action-arrow { transition: none; }
 }
+
+/* ---------------------------------------------------------
+   Arka plan işi ilerleme ekranı
+   --------------------------------------------------------- */
+.job-step { font-size: .78rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--app-brand); }
+.job-phase { font-size: 1.15rem; font-weight: 700; }
+.min-w-0 { min-width: 0; }
+
+.job-bar {
+    position: relative;
+    height: 12px;
+    border-radius: 999px;
+    background: #eef1f7;
+    overflow: hidden;
+}
+
+.job-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--app-accent), var(--app-brand));
+    transition: width .6s ease;
+}
+
+/* Toplam bilinmeyen adımlarda kayan şerit */
+.job-bar.is-indeterminate .job-bar-fill {
+    position: absolute;
+    width: 35% !important;
+    animation: job-slide 1.3s ease-in-out infinite;
+}
+
+@keyframes job-slide {
+    0% { left: -35%; }
+    100% { left: 100%; }
+}
+
+.job-figures { display: flex; justify-content: space-between; align-items: baseline; margin-top: .5rem; }
+.job-percent { font-size: 1.6rem; font-weight: 700; letter-spacing: -.02em; }
+.job-count { color: var(--app-muted); font-weight: 600; }
+.job-current { padding: .6rem .8rem; border-radius: 10px; background: var(--app-soft); border: 1px solid var(--app-line-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.job-spinner .icon { animation: job-pulse 1.4s ease-in-out infinite; }
+@keyframes job-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+
+.job-card.is-done .job-bar-fill { background: linear-gradient(90deg, #10b981, #059669); }
+.job-card.is-done .job-spinner { color: #047857; background: #ecfdf5; }
+.job-card.is-done .job-spinner .icon,
+.job-card.is-failed .job-spinner .icon { animation: none; }
+.job-card.is-failed .job-bar-fill { background: #f87171; }
+.job-card.is-failed .job-spinner { color: #b91c1c; background: #fef2f2; }
+
+/* Buton içi dönen gösterge */
+.btn-spinner {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: btn-spin .7s linear infinite;
+}
+
+@keyframes btn-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+    .job-bar.is-indeterminate .job-bar-fill, .job-spinner .icon, .btn-spinner { animation: none; }
+}

@@ -44,7 +44,7 @@ public sealed class ModuleRegistry
             new[]
             {
                 new ModuleNavItem("Rapor Arama", "Index", "search", "DeletePreview", "Delete"),
-                new ModuleNavItem("Toplu Silme (TXT)", "Bulk", "layers", "BulkPreview", "BulkExecute"),
+                new ModuleNavItem("Toplu Silme (TXT)", "Bulk", "layers", "BulkPreview", "BulkExecute", "Job", "JobResult"),
                 new ModuleNavItem("İşlem Geçmişi", "History", "clock"),
             }),
 

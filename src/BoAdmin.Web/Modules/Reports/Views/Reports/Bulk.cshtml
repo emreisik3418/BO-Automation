@@ -24,7 +24,7 @@
             Bir sonraki adımda tüm raporları ve yeni adlarını görüp onaylamadan hiçbir işlem yapılmaz.
         </div>
 
-        <form method="post" asp-action="BulkPreview" enctype="multipart/form-data" class="card card-body">
+        <form method="post" asp-action="BulkPreview" enctype="multipart/form-data" class="card card-body" data-busy-form>
             <div class="mb-3">
                 <label for="file" class="form-label">CUID listesi (.txt)</label>
                 <input type="file" class="form-control" id="file" name="file" accept=".txt,text/plain" required />
@@ -44,7 +44,7 @@
             </div>
 
             <div>
-                <button type="submit" class="btn btn-primary">Önizle</button>
+                <button type="submit" class="btn btn-primary" data-busy-text="Dosya yükleniyor...">Önizle</button>
             </div>
         </form>
 
