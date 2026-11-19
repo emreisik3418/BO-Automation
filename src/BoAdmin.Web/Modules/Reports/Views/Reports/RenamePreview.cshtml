@@ -116,7 +116,9 @@ else
         </div>
     </div>
 
-    <form method="post" asp-action="RenameExecute" id="bulkForm" class="card card-body">
+    <form method="post" asp-action="RenameExecute" id="bulkForm" class="card card-body"
+          data-critical-env="@(CurrentEnvironment.IsCritical ? CurrentEnvironment.DisplayName : null)"
+          data-confirm-text="@toProcess.Count raporun adı değiştirilecek.">
         <input type="hidden" name="Environment" value="@(Model.EnvironmentKey ?? CurrentEnvironment.Key)" />
         <input type="hidden" name="PreviewJobId" value="@Model.PreviewJobId" />
 

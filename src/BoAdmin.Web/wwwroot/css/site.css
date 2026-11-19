@@ -882,3 +882,25 @@ a.sort-link:hover { color: var(--app-brand); }
 
 /* Ad güncelleme önizlemesi */
 .rename-new { color: var(--app-brand); }
+
+/* Kritik ortam onay penceresi */
+.confirm-modal { border: 0; border-radius: 20px; box-shadow: var(--app-shadow-lg); }
+.confirm-modal .modal-body { padding: 2rem 1.75rem 1.5rem; text-align: center; }
+.confirm-icon {
+    display: inline-grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    margin-bottom: .9rem;
+    border-radius: 16px;
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #b91c1c;
+    background: #fef2f2;
+}
+.confirm-title { font-size: 1.2rem; font-weight: 700; margin-bottom: .5rem; }
+.confirm-env { margin-bottom: .35rem; }
+.confirm-env .env-dot { margin-right: .4rem; box-shadow: 0 0 0 3px rgba(220, 38, 38, .15); }
+.confirm-text { color: var(--app-muted); margin-bottom: 1.4rem; }
+.confirm-actions { display: flex; justify-content: center; gap: .6rem; }
+.confirm-actions .btn { min-width: 9rem; }

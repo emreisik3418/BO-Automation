@@ -199,6 +199,66 @@
     }
 
     // ------------------------------------------------------------
+    // Kritik ortam onayı (appsettings: Environments:{ORTAM}:IsCritical)
+    // Onay formu gönderilmeden önce "Emin misiniz?" penceresi açılır.
+    // ------------------------------------------------------------
+    function showCriticalConfirm(envName, text, onConfirm) {
+        if (typeof bootstrap === 'undefined' || !bootstrap.Modal) {
+            if (window.confirm(envName + ' ortamında işlem yapmak üzeresiniz.\n' + text + '\n\nDevam edilsin mi?')) onConfirm();
+            return;
+        }
+
+        let el = document.getElementById('criticalConfirm');
+        if (!el) {
+            el = document.createElement('div');
+            el.className = 'modal fade';
+            el.id = 'criticalConfirm';
+            el.tabIndex = -1;
+            el.setAttribute('aria-labelledby', 'criticalConfirmTitle');
+            el.setAttribute('aria-hidden', 'true');
+            el.innerHTML =
+                '<div class="modal-dialog modal-dialog-centered"><div class="modal-content confirm-modal">' +
+                '<div class="modal-body">' +
+                '<div class="confirm-icon" aria-hidden="true">!</div>' +
+                '<h2 class="confirm-title" id="criticalConfirmTitle">Kritik ortamda işlem</h2>' +
+                '<p class="confirm-env"><span class="env-dot bg-danger"></span><strong data-cc="env"></strong> ortamında işlem yapmak üzeresiniz.</p>' +
+                '<p class="confirm-text" data-cc="text"></p>' +
+                '<div class="confirm-actions">' +
+                '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" data-cc="cancel">Vazgeç</button>' +
+                '<button type="button" class="btn btn-danger" data-cc="ok">Evet, devam et</button>' +
+                '</div></div></div></div>';
+            document.body.appendChild(el);
+            // Güvenli varsayılan: pencere açılınca odak "Vazgeç"te
+            el.addEventListener('shown.bs.modal', () => el.querySelector('[data-cc="cancel"]').focus());
+        }
+
+        el.querySelector('[data-cc="env"]').textContent = envName;
+        el.querySelector('[data-cc="text"]').textContent = text;
+
+        const modal = bootstrap.Modal.getOrCreateInstance(el);
+        el.querySelector('[data-cc="ok"]').onclick = () => { modal.hide(); onConfirm(); };
+        modal.show();
+    }
+
+    document.querySelectorAll('form[data-critical-env]').forEach(f => {
+        const envName = f.dataset.criticalEnv;
+        if (!envName) return; // kritik olmayan ortam
+
+        // capture: buton kilitleme gibi diğer submit işleyicilerinden önce çalışır
+        f.addEventListener('submit', e => {
+            if (f.dataset.confirmed === '1') return;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+
+            showCriticalConfirm(envName, f.dataset.confirmText || '', () => {
+                f.dataset.confirmed = '1';
+                if (typeof f.requestSubmit === 'function') f.requestSubmit(e.submitter || undefined);
+                else f.submit();
+            });
+        }, true);
+    });
+
+    // ------------------------------------------------------------
     // Silme / toplu silme önizleme: işlem türü + sayı ile onay
     // ------------------------------------------------------------
     const form = document.getElementById('deleteForm') || document.getElementById('bulkForm');

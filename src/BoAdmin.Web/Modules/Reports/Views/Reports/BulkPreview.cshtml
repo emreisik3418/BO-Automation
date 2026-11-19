@@ -143,7 +143,9 @@ else
     </div>
 
     @* ---------------- Onay ---------------- *@
-    <form method="post" asp-action="BulkExecute" id="bulkForm" class="card card-body">
+    <form method="post" asp-action="BulkExecute" id="bulkForm" class="card card-body"
+          data-critical-env="@(CurrentEnvironment.IsCritical ? CurrentEnvironment.DisplayName : null)"
+          data-confirm-text="@toProcess.Count rapor yedek klasörüne kopyalanacak ve orijinalleri silinecek.">
         <input type="hidden" name="Environment" value="@(Model.EnvironmentKey ?? CurrentEnvironment.Key)" />
         <input type="hidden" name="TargetFolderId" value="@p.TargetFolder.Id" />
         @foreach (var item in toProcess)

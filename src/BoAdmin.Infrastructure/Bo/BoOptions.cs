@@ -57,6 +57,13 @@ public sealed class BoEnvironmentOptions
     /// <summary>Menüdeki sıra.</summary>
     public int Order { get; set; }
 
+    /// <summary>
+    /// Kritik ortam (ör. PROD). true ise silme / yedekleme / ad güncelleme onayında ek bir
+    /// "Emin misiniz?" penceresi açılır ve ekranda kırmızı uyarı gösterilir.
+    /// Yazılmazsa Color "danger" olan ortamlar kritik sayılır.
+    /// </summary>
+    public bool? IsCritical { get; set; }
+
     /// <summary>Örn. http://bo-server:6405/biprws</summary>
     public string BaseUrl { get; set; } = string.Empty;
 

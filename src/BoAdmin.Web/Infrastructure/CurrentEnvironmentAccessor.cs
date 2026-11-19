@@ -51,7 +51,7 @@ public sealed class CurrentEnvironmentAccessor : ICurrentEnvironment
     public string Color => Current.Color;
 
     /// <summary>Production gibi kritik ortamları ekranda vurgulamak için.</summary>
-    public bool IsCritical => Color == "danger";
+    public bool IsCritical => Current.IsCritical;
 
     public EnvironmentInfo Current => _resolved ??= Resolve();
 

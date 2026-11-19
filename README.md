@@ -63,6 +63,7 @@ prod'da `D:\Logs\BoAdmin\audit`. IIS app pool kimliğine bu klasörde **Modify**
 | `TokenLifetimeMinutes` | Token bu süreden sonra yenilenir (BO oturum süresinden kısa olmalı) |
 | `Environments:{ORTAM}:BaseUrl` | `http://<sunucu>:6405/biprws` |
 | `Environments:{ORTAM}:AuthType` | `secEnterprise` / `secWinAD` / `secLDAP` |
+| `Environments:{ORTAM}:IsCritical` | `true`: silme / yedekleme / ad güncelleme onayında ek "Emin misiniz?" penceresi ve kırmızı uyarı. Yazılmazsa `Color: danger` olan ortam kritik sayılır |
 | `Environments:{ORTAM}:RootFolderId` | Public Folders kökünün `SI_ID`'si (standart: 23) |
 | `Environments:{ORTAM}:ArchiveFolderId` | "Kurtarılabilir silme" arşiv klasörünün `SI_ID`'si (0 = kapalı) |
 | `Environments:{ORTAM}:DeleteStrategy` | İlk denenecek silme uç noktası: `Documents` (`DELETE /v1/documents/{id}`), `InfoObjects` veya `Raylight`. 404 dönerse diğerleri otomatik denenir |

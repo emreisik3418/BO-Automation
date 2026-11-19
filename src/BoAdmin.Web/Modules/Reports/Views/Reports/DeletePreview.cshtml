@@ -70,7 +70,9 @@ else
         </div>
     </div>
 
-    <form method="post" asp-action="Delete" id="deleteForm" class="card">
+    <form method="post" asp-action="Delete" id="deleteForm" class="card"
+          data-critical-env="@(CurrentEnvironment.IsCritical ? CurrentEnvironment.DisplayName : null)"
+          data-confirm-text="@p.Items.Count rapor işlenecek. Kalıcı silme seçiliyse bu işlem geri alınamaz.">
         <div class="card-body">
             <input type="hidden" name="Environment" value="@CurrentEnvironment.Key" />
             @foreach (var item in p.Items)
