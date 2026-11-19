@@ -120,13 +120,7 @@ else
         <input type="hidden" name="Environment" value="@(Model.EnvironmentKey ?? CurrentEnvironment.Key)" />
         <input type="hidden" name="PreviewJobId" value="@Model.PreviewJobId" />
 
-        <div class="mb-3">
-            <label for="confirmCount" class="form-label">
-                Onaylamak için güncellenecek rapor sayısını yazın: <strong>@toProcess.Count</strong>
-            </label>
-            <input type="number" class="form-control w-auto" id="confirmCount" name="ConfirmationCount"
-                   data-expected="@toProcess.Count" min="1" autocomplete="off" required />
-        </div>
+        <input type="hidden" name="ConfirmationCount" value="@toProcess.Count" />
 
         <div class="alert @(CurrentEnvironment.IsCritical ? "alert-danger fw-semibold" : "alert-warning") small">
             <strong>@CurrentEnvironment.DisplayName</strong> ortamında @toProcess.Count raporun adı değiştirilecek.
@@ -134,7 +128,7 @@ else
         </div>
 
         <div class="d-flex gap-2">
-            <button type="submit" class="btn btn-primary" id="confirmBtn" disabled>Onayla: adları güncelle</button>
+            <button type="submit" class="btn btn-primary" id="confirmBtn">Onayla: adları güncelle</button>
             <a asp-action="Rename" class="btn btn-outline-secondary">Vazgeç</a>
         </div>
     </form>

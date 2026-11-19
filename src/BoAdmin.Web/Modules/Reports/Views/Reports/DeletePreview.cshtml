@@ -111,20 +111,7 @@ else
                 </label>
             </div>
 
-            @if (Model.IsMulti)
-            {
-                <div class="mb-3">
-                    <label for="confirmCount" class="form-label">
-                        Onaylamak için işlenecek rapor sayısını yazın: <strong>@p.Items.Count</strong>
-                    </label>
-                    <input type="number" class="form-control w-auto" id="confirmCount" name="ConfirmationCount"
-                           data-expected="@p.Items.Count" min="1" autocomplete="off" required />
-                </div>
-            }
-            else
-            {
-                <input type="hidden" name="ConfirmationCount" value="1" />
-            }
+            <input type="hidden" name="ConfirmationCount" value="@p.Items.Count" />
 
             <div class="alert alert-warning small" id="deleteWarning">Kalıcı silme geri alınamaz.</div>
             @if (CurrentEnvironment.IsCritical)
@@ -133,7 +120,7 @@ else
             }
 
             <div class="d-flex gap-2">
-                <button type="submit" class="btn btn-danger" id="confirmBtn" disabled="@Model.IsMulti">Onayla ve sil</button>
+                <button type="submit" class="btn btn-danger" id="confirmBtn">Onayla ve sil</button>
                 <a asp-action="Index" class="btn btn-outline-secondary">Vazgeç</a>
             </div>
         </div>
