@@ -199,8 +199,8 @@ body.app-body {
 .env-switch-btn[aria-expanded="true"] { background: rgba(255, 255, 255, .09); border-color: rgba(255, 255, 255, .18); }
 
 .env-switch-text { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; line-height: 1.2; }
-.env-switch-name { font-weight: 600; }
-.env-switch-key { font-size: .75rem; color: rgba(226, 232, 240, .6); }
+.env-switch-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.env-switch-key { font-size: .75rem; color: rgba(226, 232, 240, .6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .env-switch-caret { opacity: .6; }
 
 .env-menu {
@@ -328,6 +328,9 @@ body.app-body {
     white-space: nowrap;
 }
 
+.env-pill { max-width: 22rem; overflow: hidden; text-overflow: ellipsis; }
+.env-menu { max-width: 360px; }
+.env-menu-item > .flex-grow-1 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .env-pill .env-dot { box-shadow: 0 0 0 3px rgba(15, 23, 42, .06); }
 .env-pill-danger { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
 .env-pill-warning { background: #fffbeb; border-color: #fde68a; color: #92400e; }
