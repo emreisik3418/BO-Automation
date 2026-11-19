@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace BoAdmin.Web.Models;
 
 /// <summary>Giriş ekranında seçilebilecek bir ortam.</summary>
@@ -21,19 +19,5 @@ public sealed class LoginViewModel
     public bool HasAccess => Environments.Count > 0;
 
     /// <summary>Avatar için baş harfler: "Emre Işık" -> "Eİ"</summary>
-    public string Initials
-    {
-        get
-        {
-            var tr = CultureInfo.GetCultureInfo("tr-TR");
-            var parts = DisplayName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            var letters = parts.Length switch
-            {
-                0 => Sicil.Length > 0 ? Sicil[..1] : "?",
-                1 => parts[0][..1],
-                _ => string.Concat(parts[0][..1], parts[^1][..1])
-            };
-            return letters.ToUpper(tr);
-        }
-    }
+    public string Initials => BoAdmin.Web.Infrastructure.UserInitials.From(DisplayName, Sicil);
 }

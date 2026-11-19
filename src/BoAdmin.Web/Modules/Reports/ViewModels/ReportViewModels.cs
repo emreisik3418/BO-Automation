@@ -12,20 +12,46 @@ namespace BoAdmin.Web.Modules.Reports.ViewModels;
 
 public sealed class ReportSearchViewModel
 {
+    /// <summary>Arama formundaki gizli alan; yalnızca bu varsa BO'da arama yapılır.</summary>
+    public const string SearchFlag = "search";
+
     public ReportSearchCriteria Criteria { get; init; } = new();
     public PagedResult<ReportListItemDto>? Result { get; set; }
-    public IReadOnlyList<FolderDto> Folders { get; set; } = Array.Empty<FolderDto>();
+
+    /// <summary>Seçili klasör (otomatik tamamlama kutusunda yolu gösterilir).</summary>
+    public FolderDto? SelectedFolder { get; set; }
+
     public string? ErrorMessage { get; set; }
+
+    /// <summary>Kullanıcı arama yaptı mı (ilk açılışta false: BO'ya istek atılmaz).</summary>
+    public bool Searched { get; set; }
 
     public IReadOnlyList<ReportKindInfo> Kinds => ReportKinds.All;
 
-    public static readonly int[] PageSizes = { 25, 50, 100, 200 };
+    public static readonly int[] PageSizes = { 20, 50, 100, 200 };
+
+    /// <summary>Hızlı filtre linkleri (ilk açılış ekranı).</summary>
+    public static Dictionary<string, string> QuickFilter(int? lastDays = null, string? kind = null)
+    {
+        var d = new Dictionary<string, string>
+        {
+            [SearchFlag] = "1",
+            ["Criteria.SortBy"] = nameof(ReportSortField.UpdatedAt),
+            ["Criteria.SortDescending"] = "True",
+            ["Criteria.PageSize"] = "20"
+        };
+        if (lastDays is not null)
+            d["Criteria.UpdatedFrom"] = DateTime.Today.AddDays(-lastDays.Value).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        if (kind is not null)
+            d["Criteria.Kind"] = kind;
+        return d;
+    }
 
     /// <summary>Mevcut filtreleri koruyarak sayfa/sıralama linki üretir.</summary>
     public Dictionary<string, string> RouteValues(int? page = null, ReportSortField? sortBy = null, bool? sortDescending = null)
     {
         var c = Criteria;
-        var d = new Dictionary<string, string>();
+        var d = new Dictionary<string, string> { [SearchFlag] = "1" };
 
         void Add(string key, object? value)
         {
@@ -148,7 +174,7 @@ public sealed class HistoryViewModel
     public AuditQuery Query { get; init; } = new();
     public PagedResult<AuditEntry>? Result { get; set; }
 
-    public static readonly int[] PageSizes = { 25, 50, 100, 200 };
+    public static readonly int[] PageSizes = { 20, 50, 100, 200 };
 
     public Dictionary<string, string> RouteValues(int? page = null)
     {

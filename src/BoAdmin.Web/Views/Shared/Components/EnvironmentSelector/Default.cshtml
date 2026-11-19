@@ -1,3 +1,4 @@
+@using BoAdmin.Web.Infrastructure
 @model BoAdmin.Web.ViewComponents.EnvironmentSelectorModel
 
 @if (Model.Accessible.Count == 0)
@@ -5,13 +6,17 @@
     return;
 }
 
-<div class="dropdown">
-    <button class="btn btn-sm btn-@Model.Current.Color dropdown-toggle fw-semibold border border-light"
-            type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Aktif BO ortamı">
-        Ortam: @Model.Current.DisplayName
+<div class="dropup env-switch">
+    <button class="env-switch-btn" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Aktif BO ortamını değiştir">
+        <span class="env-dot bg-@Model.Current.Color" aria-hidden="true"></span>
+        <span class="env-switch-text">
+            <span class="env-switch-name">@Model.Current.DisplayName</span>
+            <span class="env-switch-key">@Model.Current.Key ortamı</span>
+        </span>
+        @Icons.Get("chevron-down", 16, "env-switch-caret")
     </button>
 
-    <ul class="dropdown-menu dropdown-menu-end">
+    <ul class="dropdown-menu env-menu">
         <li><h6 class="dropdown-header">BO ortamı seçin</h6></li>
         @foreach (var env in Model.Accessible)
         {
@@ -20,9 +25,10 @@
                 <form method="post" asp-controller="Environment" asp-action="Select" class="m-0">
                     <input type="hidden" name="key" value="@env.Key" />
                     <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
-                    <button type="submit" class="dropdown-item d-flex align-items-center gap-2 @(isCurrent ? "active" : "")">
-                        <span class="badge text-bg-@env.Color">@env.Key</span>
-                        @env.DisplayName
+                    <button type="submit" class="dropdown-item env-menu-item @(isCurrent ? "active" : "")">
+                        <span class="env-dot bg-@env.Color" aria-hidden="true"></span>
+                        <span class="flex-grow-1">@env.DisplayName</span>
+                        <span class="env-key-chip">@env.Key</span>
                     </button>
                 </form>
             </li>

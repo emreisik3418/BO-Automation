@@ -13,6 +13,11 @@ public interface IReportService
 
     Task<IReadOnlyList<FolderDto>> GetFoldersAsync(CancellationToken ct = default);
 
+    Task<FolderDto?> GetFolderAsync(int folderId, CancellationToken ct = default);
+
+    /// <summary>Yolunda verilen metni içeren klasörler (otomatik tamamlama için, en fazla <paramref name="take"/>).</summary>
+    Task<IReadOnlyList<FolderDto>> SearchFoldersAsync(string term, int take = 25, CancellationToken ct = default);
+
     Task<DeletePreviewDto> PrepareDeleteAsync(IReadOnlyCollection<int> reportIds, CancellationToken ct = default);
 
     /// <summary>
@@ -90,6 +95,27 @@ public sealed class ReportService : IReportService
 
     public Task<IReadOnlyList<FolderDto>> GetFoldersAsync(CancellationToken ct = default) =>
         _gateway.GetFoldersAsync(ct);
+
+    public Task<FolderDto?> GetFolderAsync(int folderId, CancellationToken ct = default) =>
+        _gateway.GetFolderAsync(folderId, ct);
+
+    public async Task<IReadOnlyList<FolderDto>> SearchFoldersAsync(string term, int take = 25, CancellationToken ct = default)
+    {
+        term = term?.Trim() ?? string.Empty;
+        if (term.Length < 2) return Array.Empty<FolderDto>();
+
+        var folders = await _gateway.GetFoldersAsync(ct);
+        var isId = int.TryParse(term, out var id);
+
+        return folders
+            .Where(f => (isId && f.Id == id) || f.Path.Contains(term, StringComparison.CurrentCultureIgnoreCase))
+            // Klasör adı terimle başlayanlar ve kısa yollar önce
+            .OrderByDescending(f => isId && f.Id == id)
+            .ThenByDescending(f => f.Name.StartsWith(term, StringComparison.CurrentCultureIgnoreCase))
+            .ThenBy(f => f.Path.Length)
+            .Take(Math.Clamp(take, 1, 50))
+            .ToList();
+    }
 
     // ------------------------------------------------------------------
     // Silme (arama ekranından)

@@ -1,37 +1,40 @@
+@using BoAdmin.Web.Infrastructure
 @inject ICurrentUser CurrentUser
 @inject ICurrentEnvironment CurrentEnvironment
 @{
     ViewData["Title"] = "Erişim Reddedildi";
+    ViewData["HideHeader"] = true;
 }
 
-<div class="row justify-content-center">
-    <div class="col-lg-7">
-        <div class="card border-warning shadow-sm">
-            <div class="card-body">
-                <h1 class="h4">Erişim Reddedildi</h1>
-                <p>Bu sayfaya <strong>@CurrentEnvironment.DisplayName</strong> ortamında erişim yetkiniz bulunmuyor.</p>
+<div class="card state-card">
+    <div>
+        <span class="state-icon tone-danger">@Icons.Get("lock", 28)</span>
+    </div>
+    <h1 class="h4 fw-bold mb-2">Erişim reddedildi</h1>
+    <p class="text-muted mb-4">
+        Bu sayfaya <strong>@CurrentEnvironment.DisplayName</strong> ortamında erişim yetkiniz bulunmuyor.
+    </p>
 
-                @if (CurrentUser.IsAuthenticated)
-                {
-                    <dl class="row small mb-3">
-                        <dt class="col-sm-3">Kullanıcı</dt>
-                        <dd class="col-sm-9">@CurrentUser.DisplayName</dd>
-                        <dt class="col-sm-3">Sicil</dt>
-                        <dd class="col-sm-9">@CurrentUser.Sicil</dd>
-                        <dt class="col-sm-3">Hesap</dt>
-                        <dd class="col-sm-9">@CurrentUser.UserName</dd>
-                        <dt class="col-sm-3">Ortam</dt>
-                        <dd class="col-sm-9">@CurrentEnvironment.DisplayName (@CurrentEnvironment.Key)</dd>
-                    </dl>
-                }
-
-                <p class="text-muted small">
-                    Yetki talebi için sicil numaranızla sistem yöneticinize başvurun.
-                </p>
-
-                <a class="btn btn-outline-secondary btn-sm" href="javascript:history.back()">Geri dön</a>
-                <span class="small text-muted ms-2">Başka bir ortamda yetkiniz varsa sağ üstteki "Ortam" menüsünden geçebilirsiniz.</span>
+    @if (CurrentUser.IsAuthenticated)
+    {
+        <div class="summary-tile text-start mb-4">
+            <div class="row small g-2">
+                <div class="col-4 text-muted">Kullanıcı</div>
+                <div class="col-8 fw-semibold">@CurrentUser.DisplayName</div>
+                <div class="col-4 text-muted">Sicil</div>
+                <div class="col-8 fw-semibold">@CurrentUser.Sicil</div>
+                <div class="col-4 text-muted">Ortam</div>
+                <div class="col-8 fw-semibold">@CurrentEnvironment.DisplayName (@CurrentEnvironment.Key)</div>
             </div>
         </div>
+    }
+
+    <p class="small text-muted">
+        Yetki talebi için sicil numaranızla sistem yöneticinize başvurun. Başka bir ortamda yetkiniz varsa
+        sol menünün altındaki <strong>Ortam</strong> seçiciden geçebilirsiniz.
+    </p>
+
+    <div class="d-flex justify-content-center gap-2">
+        <a class="btn btn-outline-secondary" href="javascript:history.back()">Geri dön</a>
     </div>
 </div>

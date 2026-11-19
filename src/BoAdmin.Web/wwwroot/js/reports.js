@@ -1,4 +1,4 @@
-// Rapor İşlemleri ekranları
+// Rapor Yönetişimi ekranları
 (function () {
     'use strict';
 
@@ -34,6 +34,84 @@
     });
 
     refreshSelection();
+
+    // ------------------------------------------------------------
+    // Klasör otomatik tamamlama (klasör listesi sayfayla birlikte yüklenmez)
+    // ------------------------------------------------------------
+    document.querySelectorAll('[data-folder-autocomplete]').forEach(box => {
+        const input = box.querySelector('input[type="text"]');
+        const hidden = box.querySelector('[data-folder-id]');
+        const list = box.querySelector('.autocomplete-list');
+        const url = box.dataset.url;
+        let timer = null;
+        let items = [];
+        let active = -1;
+        let lastQuery = '';
+
+        const escapeHtml = v => String(v).replace(/[&<>"']/g, ch =>
+            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+
+        function close() { list.hidden = true; active = -1; }
+
+        function render(message) {
+            if (message) {
+                list.innerHTML = '<li class="autocomplete-empty">' + escapeHtml(message) + '</li>';
+            } else {
+                list.innerHTML = items.map((f, i) =>
+                    '<li><button type="button" class="autocomplete-item' + (i === active ? ' active' : '') + '" data-index="' + i + '">' +
+                    '<span class="ac-name">' + escapeHtml(f.name) + '</span>' +
+                    '<span class="ac-path">' + escapeHtml(f.path) + ' · ID ' + f.id + '</span></button></li>').join('');
+            }
+            list.hidden = false;
+        }
+
+        function choose(i) {
+            const f = items[i];
+            if (!f) return;
+            input.value = f.path;
+            hidden.value = f.id;
+            close();
+        }
+
+        async function search(q) {
+            lastQuery = q;
+            render('Aranıyor...');
+            try {
+                const res = await fetch(url + '?q=' + encodeURIComponent(q), { headers: { 'Accept': 'application/json' } });
+                if (q !== lastQuery) return; // daha yeni bir arama başladı
+                if (!res.ok) { render('Klasörler alınamadı.'); return; }
+                items = await res.json();
+                active = -1;
+                if (items.length === 0) render('Eşleşen klasör yok.');
+                else render();
+            } catch {
+                render('Klasörler alınamadı.');
+            }
+        }
+
+        input.addEventListener('input', () => {
+            hidden.value = ''; // yazı değişince seçim temizlenir
+            clearTimeout(timer);
+            const q = input.value.trim();
+            if (q.length < 2) { close(); return; }
+            timer = setTimeout(() => search(q), 250);
+        });
+
+        input.addEventListener('keydown', e => {
+            if (list.hidden || items.length === 0) return;
+            if (e.key === 'ArrowDown') { active = Math.min(active + 1, items.length - 1); render(); e.preventDefault(); }
+            else if (e.key === 'ArrowUp') { active = Math.max(active - 1, 0); render(); e.preventDefault(); }
+            else if (e.key === 'Enter' && active >= 0) { choose(active); e.preventDefault(); }
+            else if (e.key === 'Escape') { close(); }
+        });
+
+        list.addEventListener('mousedown', e => {
+            const btn = e.target.closest('.autocomplete-item');
+            if (btn) { choose(Number(btn.dataset.index)); e.preventDefault(); }
+        });
+
+        input.addEventListener('blur', () => setTimeout(close, 150));
+    });
 
     // ------------------------------------------------------------
     // Silme / toplu silme önizleme: işlem türü + sayı ile onay

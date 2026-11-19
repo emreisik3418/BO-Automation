@@ -37,7 +37,7 @@ public sealed class ReportSearchCriteria
     public bool SortDescending { get; set; }
 
     public int Page { get; set; } = 1;
-    public int PageSize { get; set; } = 50;
+    public int PageSize { get; set; } = 20;
 }
 
 /// <summary>Tablodaki rapor satırı.</summary>

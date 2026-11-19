@@ -13,8 +13,9 @@ using Microsoft.AspNetCore.Mvc;
 namespace BoAdmin.Web.Modules.Reports;
 
 /// <summary>
-/// "Rapor İşlemleri" sekmesi (seçili ortamda).
-///  GET  /Reports                -> arama + liste
+/// "Rapor Yönetişimi" modülü (seçili ortamda).
+///  GET  /Reports                -> arama formu; ?search=1 ile arama + liste
+///  GET  /Reports/Folders?q=     -> klasör otomatik tamamlama (JSON)
 ///  GET  /Reports/DeletePreview  -> silme önizleme (yan etkisiz)
 ///  POST /Reports/Delete         -> silme / arşive taşıma
 ///  GET  /Reports/Bulk           -> TXT ile toplu yedekleme: dosya yükleme
@@ -53,12 +54,22 @@ public sealed class ReportsController : Controller
     [HttpGet]
     public async Task<IActionResult> Index(ReportSearchCriteria criteria, CancellationToken ct)
     {
-        var vm = new ReportSearchViewModel { Criteria = criteria };
+        var vm = new ReportSearchViewModel
+        {
+            Criteria = criteria,
+            // İlk açılışta BO'ya istek atılmaz; kullanıcı "Ara" veya hızlı filtre ile başlatır
+            Searched = Request.Query.ContainsKey(ReportSearchViewModel.SearchFlag)
+        };
+
+        if (!vm.Searched)
+            return View(vm);
 
         // BO'ya ulaşılamasa bile form görünsün; hata sayfanın üstünde gösterilir
         try
         {
-            vm.Folders = await _reports.GetFoldersAsync(ct);
+            if (criteria.FolderId is > 0)
+                vm.SelectedFolder = await _reports.GetFolderAsync(criteria.FolderId.Value, ct);
+
             vm.Result = await _reports.SearchAsync(criteria, ct);
         }
         catch (BoException ex)
@@ -71,6 +82,21 @@ public sealed class ReportsController : Controller
         }
 
         return View(vm);
+    }
+
+    /// <summary>Klasör kutusu için otomatik tamamlama: [{ id, name, path }]</summary>
+    [HttpGet]
+    public async Task<IActionResult> Folders(string? q, CancellationToken ct)
+    {
+        try
+        {
+            var folders = await _reports.SearchFoldersAsync(q ?? string.Empty, 25, ct);
+            return Json(folders.Select(f => new { id = f.Id, name = f.Name, path = f.Path }));
+        }
+        catch (BoException ex)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, new { error = ex.UserMessage });
+        }
     }
 
     // ------------------------------------------------------------------

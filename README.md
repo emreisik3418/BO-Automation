@@ -18,9 +18,9 @@ Bağımlılık yönü: `Web → Application ← Infrastructure` (Web, compositio
 
 | Modül | Durum |
 |---|---|
-| Rapor İşlemleri (`Reports`) | Geliştiriliyor |
-| Kullanıcı İşlemleri (`Users`) | Yakında |
-| Grup İşlemleri (`Groups`) | Yakında |
+| Rapor Yönetişimi (`Reports`) | Geliştiriliyor |
+| Kullanıcı Yönetimi (`Users`) | Yakında |
+| Grup Yönetimi (`Groups`) | Yakında |
 
 ## Giriş ekranı
 
@@ -69,9 +69,9 @@ prod'da `D:\Logs\BoAdmin\audit`. IIS app pool kimliğine bu klasörde **Modify**
 | `Environments:{ORTAM}:MoveStrategy` | `InfoObjects` (`PUT /v1/infoobjects/{id}`) veya `Raylight` |
 | `Environments:{ORTAM}:Authorization` | Modül bazlı `AllowedUsers` / `AllowedGroups` |
 
-## Rapor İşlemleri
+## Rapor Yönetişimi
 
-- **Rapor Arama:** filtre, sıralama, sayfalama; tekli/çoklu silme veya arşive taşıma (önizleme + sayı ile onay)
+- **Rapor Arama:** ilk açılışta liste yüklenmez (hızlı filtreler veya "Ara" ile başlar), 20 kayıtlık sayfalar, klasör otomatik tamamlama; filtre, sıralama, sayfalama; tekli/çoklu silme veya arşive taşıma (önizleme + sayı ile onay)
 - **Toplu Silme (TXT):** CUID listesi yüklenir, yedekleme klasörü ID'si girilir. Her rapor yedekleme klasörüne
   `{rapor adı}_{orijinal CUID}` adıyla kopyalanır (Raylight, yalnızca Web Intelligence), kopya doğrulanınca
   orijinal silinir. Kopya oluşmazsa orijinale dokunulmaz; yeniden çalıştırmada var olan yedek tekrar kopyalanmaz.

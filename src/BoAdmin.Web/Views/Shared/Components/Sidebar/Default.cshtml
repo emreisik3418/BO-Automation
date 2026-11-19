@@ -1,0 +1,49 @@
+@using BoAdmin.Web.Infrastructure
+@model BoAdmin.Web.ViewComponents.SidebarModel
+
+<nav class="sidebar-nav" aria-label="Ana menü">
+    <a class="nav-link-app @(Model.HomeActive ? "active" : "")" asp-controller="Home" asp-action="Index">
+        @Icons.Get("home")
+        <span>Ana Sayfa</span>
+    </a>
+
+    @if (Model.Modules.Count > 0)
+    {
+        <div class="sidebar-section">Modüller</div>
+    }
+
+    @foreach (var m in Model.Modules)
+    {
+        <div class="nav-group @(m.IsActive ? "open" : "")">
+            <a class="nav-link-app @(m.IsActive ? "active" : "")" asp-controller="@m.Module.Controller" asp-action="@m.Module.Action">
+                @Icons.Get(m.Module.Icon)
+                <span>@m.Module.Title</span>
+            </a>
+            @if (m.Items.Count > 0)
+            {
+                <div class="nav-sub">
+                    @foreach (var item in m.Items)
+                    {
+                        <a class="nav-sub-link @(item.IsActive ? "active" : "")" asp-controller="@m.Module.Controller" asp-action="@item.Item.Action">
+                            @Icons.Get(item.Item.Icon, 16)
+                            <span>@item.Item.Title</span>
+                        </a>
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    @if (Model.ComingSoon.Count > 0)
+    {
+        <div class="sidebar-section">Yakında</div>
+        foreach (var m in Model.ComingSoon)
+        {
+            <span class="nav-link-app disabled" title="Bu modül henüz hazır değil">
+                @Icons.Get(m.Icon)
+                <span>@m.Title</span>
+                <span class="soon-badge">Yakında</span>
+            </span>
+        }
+    }
+</nav>

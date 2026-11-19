@@ -1,72 +1,133 @@
+@using BoAdmin.Web.Infrastructure
 @inject ICurrentUser CurrentUser
-@inject BoAdmin.Web.Infrastructure.CurrentEnvironmentAccessor CurrentEnvironment
+@inject CurrentEnvironmentAccessor CurrentEnvironment
+@inject ModuleRegistry Modules
+@{
+    var controller = ViewContext.RouteData.Values["controller"]?.ToString();
+    var section = ViewData["Section"] as string
+                  ?? Modules.FindByController(controller)?.Title
+                  ?? (string.Equals(controller, "Home", StringComparison.OrdinalIgnoreCase) ? "Genel bakış" : null);
+    var title = ViewData["Title"] as string;
+    var subtitle = ViewData["Subtitle"] as string;
+    var hideHeader = ViewData["HideHeader"] is true;
+    var env = CurrentEnvironment.Current;
+}
 <!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@(ViewData["Title"] is string title ? title + " - " : "")BO Yönetim</title>
+    <title>@(title is not null ? title + " - " : "")BO Yönetim</title>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
-<body>
-    <header class="sticky-top shadow-sm">
-        <nav class="navbar navbar-dark bg-primary">
-            <div class="container-fluid">
-                <a class="navbar-brand fw-semibold" asp-controller="Home" asp-action="Index">BO Yönetim</a>
-                @if (CurrentUser.IsAuthenticated)
-                {
-                    <div class="d-flex align-items-center gap-3">
-                        @await Component.InvokeAsync("EnvironmentSelector")
-                        <span class="navbar-text text-white small">
-                            @CurrentUser.DisplayName
-                            <span class="opacity-75">(@CurrentUser.Sicil)</span>
+<body class="app-body">
+    <div class="app-shell">
+
+        @* ---------------- Sol menü ---------------- *@
+        <aside class="app-sidebar" id="appSidebar">
+            <div class="sidebar-brand">
+                <a class="brand-link" asp-controller="Home" asp-action="Index">
+                    <span class="brand-mark" aria-hidden="true">
+                        <svg viewBox="0 0 32 32" width="22" height="22" fill="none">
+                            <rect x="5" y="17" width="5" height="10" rx="1.5" fill="currentColor" opacity=".55" />
+                            <rect x="13.5" y="11" width="5" height="16" rx="1.5" fill="currentColor" opacity=".8" />
+                            <rect x="22" y="5" width="5" height="22" rx="1.5" fill="currentColor" />
+                        </svg>
+                    </span>
+                    <span>
+                        <span class="brand-name">BO Yönetim</span>
+                        <span class="brand-sub">SAP BusinessObjects 4.3</span>
+                    </span>
+                </a>
+                <button type="button" class="sidebar-close" data-sidebar-close aria-label="Menüyü kapat">@Icons.Get("close")</button>
+            </div>
+
+            @if (CurrentUser.IsAuthenticated)
+            {
+                @await Component.InvokeAsync("Sidebar")
+
+                <div class="sidebar-footer">
+                    <div class="sidebar-section">Ortam</div>
+                    @await Component.InvokeAsync("EnvironmentSelector")
+
+                    <div class="user-card">
+                        <span class="user-avatar" aria-hidden="true">@UserInitials.From(CurrentUser.DisplayName, CurrentUser.Sicil)</span>
+                        <span class="user-text">
+                            <span class="user-name" title="@CurrentUser.DisplayName">@CurrentUser.DisplayName</span>
+                            <span class="user-meta">@CurrentUser.Sicil</span>
                         </span>
                         <form method="post" asp-controller="Account" asp-action="Logout" class="m-0">
-                            <button type="submit" class="btn btn-sm btn-outline-light" title="Giriş ekranına dön">Çıkış</button>
+                            <button type="submit" class="icon-btn" title="Çıkış" aria-label="Çıkış">@Icons.Get("logout")</button>
                         </form>
                     </div>
-                }
-            </div>
-        </nav>
-
-        @if (CurrentUser.IsAuthenticated)
-        {
-            @* Aktif ortam rengiyle ince şerit: PROD'da kırmızı *@
-            <div class="env-strip bg-@CurrentEnvironment.Color"></div>
-            <div class="bg-white border-bottom">
-                <div class="container-fluid">
-                    @await Component.InvokeAsync("ModuleTabs")
                 </div>
-            </div>
-        }
-    </header>
+            }
+        </aside>
+        <div class="sidebar-backdrop" data-sidebar-close></div>
 
-    <main class="container-fluid py-3">
-        @if (TempData["Success"] is string successMessage)
-        {
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                @successMessage
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Kapat"></button>
-            </div>
-        }
-        @if (TempData["Warning"] is string warningMessage)
-        {
-            <div class="alert alert-warning alert-dismissible fade show" role="alert">
-                @warningMessage
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Kapat"></button>
-            </div>
-        }
+        @* ---------------- İçerik ---------------- *@
+        <div class="app-main">
+            <div class="env-strip bg-@env.Color" title="Aktif ortam: @env.DisplayName"></div>
 
-        @RenderBody()
-    </main>
+            <header class="app-topbar">
+                <button type="button" class="icon-btn topbar-menu" data-sidebar-open aria-label="Menüyü aç">@Icons.Get("menu", 20)</button>
 
-    <footer class="border-top text-muted small py-2 bg-white">
-        <div class="container-fluid">BO Yönetim &middot; SAP BusinessObjects 4.3</div>
-    </footer>
+                <div class="topbar-titles">
+                    @if (!hideHeader)
+                    {
+                        if (section is not null)
+                        {
+                            <div class="topbar-section">@section</div>
+                        }
+                        if (title is not null)
+                        {
+                            <h1 class="topbar-title">@title</h1>
+                        }
+                    }
+                </div>
+
+                <div class="topbar-actions">
+                    @RenderSection("HeaderActions", required: false)
+                    <span class="env-pill env-pill-@env.Color" title="Aktif BO ortamı">
+                        <span class="env-dot bg-@env.Color" aria-hidden="true"></span>@env.DisplayName
+                    </span>
+                </div>
+            </header>
+
+            <main class="app-content">
+                @if (!hideHeader && subtitle is not null)
+                {
+                    <p class="page-subtitle">@subtitle</p>
+                }
+
+                @if (TempData["Success"] is string successMessage)
+                {
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        @successMessage
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Kapat"></button>
+                    </div>
+                }
+                @if (TempData["Warning"] is string warningMessage)
+                {
+                    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                        @warningMessage
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Kapat"></button>
+                    </div>
+                }
+
+                @RenderBody()
+            </main>
+
+            <footer class="app-footer">
+                BO Yönetim &middot; SAP BusinessObjects 4.3 &middot; @env.DisplayName (@env.Key)
+            </footer>
+        </div>
+    </div>
 
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

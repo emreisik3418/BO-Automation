@@ -1,65 +1,72 @@
+@using BoAdmin.Web.Infrastructure
 @model DeleteResultViewModel
-@inject BoAdmin.Web.Infrastructure.CurrentEnvironmentAccessor CurrentEnvironment
+@inject CurrentEnvironmentAccessor CurrentEnvironment
 @{
-    ViewData["Title"] = "İşlem Sonucu";
+    ViewData["Title"] = Model.OperationText + " sonucu";
     var isBulk = Model.Operation == ReportOperation.BackupCopy;
 }
 
-<partial name="_ReportsNav" model="@(isBulk ? "Bulk" : "Search")" />
-
-<h1 class="h5 mb-3">
-    @Model.OperationText sonucu
-    <span class="badge text-bg-@CurrentEnvironment.Color align-middle ms-1">@CurrentEnvironment.DisplayName</span>
-</h1>
-
-<div class="d-flex flex-wrap gap-2 mb-3">
-    <div class="alert alert-success py-2 mb-0">Başarılı: <strong>@Model.SuccessCount</strong></div>
-    <div class="alert @(Model.FailCount > 0 ? "alert-danger" : "alert-light border") py-2 mb-0">Başarısız: <strong>@Model.FailCount</strong></div>
+<div class="row g-3 mb-3">
+    <div class="col-6 col-md-3">
+        <div class="stat-card">
+            <span class="stat-icon tone-success">@Icons.Get("check")</span>
+            <div class="stat-label">Başarılı</div>
+            <div class="stat-value">@Model.SuccessCount</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card">
+            <span class="stat-icon @(Model.FailCount > 0 ? "tone-danger" : "tone-muted")">@Icons.Get("alert")</span>
+            <div class="stat-label">Başarısız</div>
+            <div class="stat-value">@Model.FailCount</div>
+        </div>
+    </div>
+    <div class="col-12 col-md-6">
+        <div class="stat-card">
+            <span class="stat-icon tone-brand">@Icons.Get("server")</span>
+            <div class="stat-label">Ortam</div>
+            <div class="stat-value fs-5"><span class="env-dot bg-@CurrentEnvironment.Color me-2"></span>@CurrentEnvironment.DisplayName</div>
+        </div>
+    </div>
 </div>
 
-<div class="table-responsive bg-white border rounded mb-3">
-    <table class="table table-sm align-middle mb-0">
-        <thead class="table-light">
-            <tr>
-                <th>Sonuç</th>
-                <th>Rapor adı</th>
-                <th>Klasör</th>
-                <th>Mesaj</th>
-                <th>ID</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var r in Model.Results)
-            {
-                <tr class="@(r.Success ? "" : "table-danger")">
-                    <td>
-                        @if (r.Success)
-                        {
-                            <span class="badge text-bg-success">Başarılı</span>
-                        }
-                        else
-                        {
-                            <span class="badge text-bg-danger">Başarısız</span>
-                        }
-                    </td>
-                    <td>@r.ReportName</td>
-                    <td class="small text-muted">@r.FolderPath</td>
-                    <td class="small">@r.Message</td>
-                    <td class="small text-muted">@r.ReportId</td>
+<div class="card mb-3">
+    <div class="toolbar"><span class="toolbar-title">Rapor bazında sonuç</span></div>
+    <div class="table-wrap">
+        <table class="table table-modern align-middle">
+            <thead>
+                <tr>
+                    <th>Sonuç</th>
+                    <th>Rapor</th>
+                    <th>Mesaj</th>
+                    <th>ID</th>
                 </tr>
-            }
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                @foreach (var r in Model.Results)
+                {
+                    <tr class="@(r.Success ? "" : "row-fail")">
+                        <td>
+                            <span class="status-pill @(r.Success ? "status-ok" : "status-fail")">@(r.Success ? "Başarılı" : "Başarısız")</span>
+                        </td>
+                        <td><div class="cell-title">@r.ReportName</div><div class="cell-sub">@r.FolderPath</div></td>
+                        <td class="small">@r.Message</td>
+                        <td class="cell-sub">@r.ReportId</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <div class="d-flex gap-2">
     @if (isBulk)
     {
-        <a asp-action="Bulk" class="btn btn-primary btn-sm">Yeni toplu işlem</a>
+        <a asp-action="Bulk" class="btn btn-primary">Yeni toplu işlem</a>
     }
     else
     {
-        <a asp-action="Index" class="btn btn-primary btn-sm">Rapor aramaya dön</a>
+        <a asp-action="Index" class="btn btn-primary">Rapor aramaya dön</a>
     }
-    <a asp-action="History" class="btn btn-outline-secondary btn-sm">İşlem geçmişi</a>
+    <a asp-action="History" class="btn btn-outline-secondary">İşlem geçmişi</a>
 </div>

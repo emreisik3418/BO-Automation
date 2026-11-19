@@ -1,67 +1,67 @@
+@using BoAdmin.Web.Infrastructure
 @model HistoryViewModel
 @{
     ViewData["Title"] = "İşlem Geçmişi";
-    var q = Model.Query;
+    ViewData["Subtitle"] = "Rapor Yönetişimi modülünde yapılan tüm işlemler: kim, ne zaman, hangi rapor, sonuç.";
     var result = Model.Result;
-    var environments = (IReadOnlyList<BoAdmin.Web.Infrastructure.EnvironmentInfo>)(ViewBag.Environments
-        ?? Array.Empty<BoAdmin.Web.Infrastructure.EnvironmentInfo>());
+    var environments = (IReadOnlyList<EnvironmentInfo>)(ViewBag.Environments ?? Array.Empty<EnvironmentInfo>());
 }
 
-<partial name="_ReportsNav" model="@("History")" />
-
 @* ---------------- Filtreler ---------------- *@
-<form method="get" asp-action="History" class="card card-body shadow-sm mb-3">
-    <div class="row g-2 align-items-end">
-        <div class="col-lg-2 col-md-4">
-            <label asp-for="Query.Environment" class="form-label small mb-1">Ortam</label>
-            <select asp-for="Query.Environment" class="form-select form-select-sm"
-                    asp-items="@(new SelectList(environments, nameof(BoAdmin.Web.Infrastructure.EnvironmentInfo.Key), nameof(BoAdmin.Web.Infrastructure.EnvironmentInfo.DisplayName)))">
-            </select>
-        </div>
-        <div class="col-lg-2 col-md-4">
-            <label asp-for="Query.UserContains" class="form-label small mb-1">Kullanıcı</label>
-            <input asp-for="Query.UserContains" class="form-control form-control-sm" placeholder="sicil veya ad..." />
-        </div>
-        <div class="col-lg-2 col-md-4">
-            <label asp-for="Query.ObjectContains" class="form-label small mb-1">Rapor</label>
-            <input asp-for="Query.ObjectContains" class="form-control form-control-sm" placeholder="ad, ID, CUID, klasör..." />
-        </div>
-        <div class="col-lg-2 col-md-4">
-            <label asp-for="Query.Operation" class="form-label small mb-1">İşlem</label>
-            <select asp-for="Query.Operation" class="form-select form-select-sm">
-                <option value="">Tümü</option>
-                @foreach (var op in OperationNames.All)
-                {
-                    <option value="@op.Value">@op.Text</option>
-                }
-            </select>
-        </div>
-        <div class="col-lg-1 col-md-4">
-            <label asp-for="Query.Success" class="form-label small mb-1">Sonuç</label>
-            <select asp-for="Query.Success" class="form-select form-select-sm">
-                <option value="">Tümü</option>
-                <option value="True">Başarılı</option>
-                <option value="False">Başarısız</option>
-            </select>
-        </div>
-        <div class="col-lg-3 col-md-6">
-            <label class="form-label small mb-1">Tarih aralığı</label>
-            <div class="input-group input-group-sm">
-                <input asp-for="Query.From" type="date" asp-format="{0:yyyy-MM-dd}" class="form-control" title="Başlangıç" />
-                <input asp-for="Query.To" type="date" asp-format="{0:yyyy-MM-dd}" class="form-control" title="Bitiş" />
+<form method="get" asp-action="History" class="card mb-4">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-lg-2 col-md-4">
+                <label asp-for="Query.Environment" class="form-label small mb-1">Ortam</label>
+                <select asp-for="Query.Environment" class="form-select"
+                        asp-items="@(new SelectList(environments, nameof(EnvironmentInfo.Key), nameof(EnvironmentInfo.DisplayName)))">
+                </select>
+            </div>
+            <div class="col-lg-2 col-md-4">
+                <label asp-for="Query.UserContains" class="form-label small mb-1">Kullanıcı</label>
+                <input asp-for="Query.UserContains" class="form-control" placeholder="Sicil veya ad..." />
+            </div>
+            <div class="col-lg-2 col-md-4">
+                <label asp-for="Query.ObjectContains" class="form-label small mb-1">Rapor</label>
+                <input asp-for="Query.ObjectContains" class="form-control" placeholder="Ad, ID, CUID, klasör..." />
+            </div>
+            <div class="col-lg-2 col-md-4">
+                <label asp-for="Query.Operation" class="form-label small mb-1">İşlem</label>
+                <select asp-for="Query.Operation" class="form-select">
+                    <option value="">Tümü</option>
+                    @foreach (var op in OperationNames.All)
+                    {
+                        <option value="@op.Value">@op.Text</option>
+                    }
+                </select>
+            </div>
+            <div class="col-lg-1 col-md-4">
+                <label asp-for="Query.Success" class="form-label small mb-1">Sonuç</label>
+                <select asp-for="Query.Success" class="form-select">
+                    <option value="">Tümü</option>
+                    <option value="True">Başarılı</option>
+                    <option value="False">Başarısız</option>
+                </select>
+            </div>
+            <div class="col-lg-3 col-md-4">
+                <label class="form-label small mb-1">Tarih aralığı</label>
+                <div class="input-group">
+                    <input asp-for="Query.From" type="date" asp-format="{0:yyyy-MM-dd}" class="form-control" title="Başlangıç" />
+                    <input asp-for="Query.To" type="date" asp-format="{0:yyyy-MM-dd}" class="form-control" title="Bitiş" />
+                </div>
             </div>
         </div>
-    </div>
 
-    <div class="d-flex flex-wrap gap-2 align-items-center mt-3">
-        <button type="submit" class="btn btn-primary btn-sm px-3">Filtrele</button>
-        <a asp-action="History" class="btn btn-outline-secondary btn-sm">Temizle</a>
-        <a asp-action="ExportHistory" asp-all-route-data="@Model.RouteValues(page: 1)" class="btn btn-outline-success btn-sm">Excel'e aktar (CSV)</a>
+        <div class="filter-actions">
+            <button type="submit" class="btn btn-primary px-4">@Icons.Get("filter", 16) Filtrele</button>
+            <a asp-action="History" class="btn btn-outline-secondary">Temizle</a>
+            <a asp-action="ExportHistory" asp-all-route-data="@Model.RouteValues(page: 1)" class="btn btn-outline-success">@Icons.Get("download", 16) Excel'e aktar (CSV)</a>
 
-        <div class="ms-auto d-flex align-items-center gap-2">
-            <label asp-for="Query.PageSize" class="small text-muted mb-0">Sayfa başına</label>
-            <select asp-for="Query.PageSize" class="form-select form-select-sm w-auto"
-                    asp-items="@(new SelectList(HistoryViewModel.PageSizes))"></select>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <label asp-for="Query.PageSize" class="small text-muted mb-0">Sayfa başına</label>
+                <select asp-for="Query.PageSize" class="form-select form-select-sm w-auto"
+                        asp-items="@(new SelectList(HistoryViewModel.PageSizes))"></select>
+            </div>
         </div>
     </div>
 </form>
@@ -69,86 +69,89 @@
 @* ---------------- Kayıtlar ---------------- *@
 @if (result is not null)
 {
-    <div class="d-flex mb-2">
-        <span class="text-muted small ms-auto">
-            Toplam @result.TotalCount kayıt
-            @if (result.TotalPages > 0)
-            {
-                <text>&middot; Sayfa @result.Page / @result.TotalPages</text>
-            }
-        </span>
-    </div>
+    <div class="card">
+        <div class="toolbar">
+            <span class="toolbar-title">Kayıtlar</span>
+            <span class="toolbar-meta">Toplam @result.TotalCount kayıt@(result.TotalPages > 0 ? $" · Sayfa {result.Page} / {result.TotalPages}" : "")</span>
+        </div>
 
-    <div class="table-responsive bg-white border rounded">
-        <table class="table table-sm align-middle mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th class="text-nowrap">Tarih</th>
-                    <th>Kullanıcı</th>
-                    <th>İşlem</th>
-                    <th>Rapor</th>
-                    <th>Klasör</th>
-                    <th>Sonuç</th>
-                    <th>Mesaj</th>
-                </tr>
-            </thead>
-            <tbody>
-                @if (result.Items.Count == 0)
-                {
+        <div class="table-wrap">
+            <table class="table table-modern align-middle">
+                <thead>
                     <tr>
-                        <td colspan="7" class="text-center text-muted py-4">Kayıt bulunamadı.</td>
+                        <th>Tarih</th>
+                        <th>Kullanıcı</th>
+                        <th>İşlem</th>
+                        <th>Rapor</th>
+                        <th>Sonuç</th>
+                        <th>Mesaj</th>
                     </tr>
-                }
-                @foreach (var e in result.Items)
-                {
-                    <tr class="@(e.Success ? "" : "table-danger")">
-                        <td class="text-nowrap small">@e.TimestampUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")</td>
-                        <td>
-                            @(e.DisplayName ?? e.UserName)
-                            <div class="small text-muted">@e.UserName</div>
-                        </td>
-                        <td>@OperationNames.Get(e.Operation)</td>
-                        <td>
-                            @e.ObjectName
-                            <div class="small text-muted">ID: @e.ObjectId @(e.ObjectKind is null ? "" : "· " + ReportKinds.GetDisplayName(e.ObjectKind))</div>
-                            @if (!string.IsNullOrEmpty(e.ObjectCuid))
-                            {
-                                <div class="small text-muted font-monospace">@e.ObjectCuid</div>
-                            }
-                        </td>
-                        <td class="small text-muted">
-                            @e.FolderPath
-                            @if (!string.IsNullOrEmpty(e.TargetPath))
-                            {
-                                <div>&rarr; @e.TargetPath</div>
-                            }
-                        </td>
-                        <td>
-                            @if (e.Success)
-                            {
-                                <span class="badge text-bg-success">Başarılı</span>
-                            }
-                            else
-                            {
-                                <span class="badge text-bg-danger">Başarısız</span>
-                            }
-                        </td>
-                        <td class="small">@e.Message</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    </div>
+                </thead>
+                <tbody>
+                    @if (result.Items.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="6">
+                                <div class="empty-state py-4">
+                                    <span class="empty-icon">@Icons.Get("clock", 26)</span>
+                                    <div class="empty-title">Kayıt bulunamadı</div>
+                                    <p class="empty-text mb-0">Filtreleri veya tarih aralığını genişletin.</p>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    @foreach (var e in result.Items)
+                    {
+                        <tr class="@(e.Success ? "" : "row-fail")">
+                            <td class="text-nowrap">
+                                <div class="cell-title">@e.TimestampUtc.ToLocalTime().ToString("dd.MM.yyyy")</div>
+                                <div class="cell-sub">@e.TimestampUtc.ToLocalTime().ToString("HH:mm:ss")</div>
+                            </td>
+                            <td>
+                                <div class="cell-title">@(e.DisplayName ?? e.UserName)</div>
+                                <div class="cell-sub">@e.UserName</div>
+                            </td>
+                            <td class="text-nowrap">@OperationNames.Get(e.Operation)</td>
+                            <td>
+                                <div class="cell-title">@e.ObjectName</div>
+                                <div class="cell-sub">
+                                    ID @e.ObjectId
+                                    @if (e.ObjectKind is not null)
+                                    {
+                                        <span>&middot; @ReportKinds.GetDisplayName(e.ObjectKind)</span>
+                                    }
+                                </div>
+                                @if (!string.IsNullOrEmpty(e.ObjectCuid))
+                                {
+                                    <div class="cell-sub mono">@e.ObjectCuid</div>
+                                }
+                                <div class="cell-sub">@e.FolderPath</div>
+                                @if (!string.IsNullOrEmpty(e.TargetPath))
+                                {
+                                    <div class="cell-sub">&rarr; @e.TargetPath</div>
+                                }
+                            </td>
+                            <td>
+                                <span class="status-pill @(e.Success ? "status-ok" : "status-fail")">@(e.Success ? "Başarılı" : "Başarısız")</span>
+                            </td>
+                            <td class="small">@e.Message</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
 
-    <nav class="mt-3" aria-label="Sayfalama">
-        <ul class="pagination pagination-sm mb-0">
-            <li class="page-item @(result.HasPreviousPage ? "" : "disabled")">
-                <a class="page-link" asp-action="History" asp-all-route-data="@Model.RouteValues(page: result.Page - 1)">&lsaquo; Önceki</a>
-            </li>
-            <li class="page-item active"><span class="page-link">@result.Page</span></li>
-            <li class="page-item @(result.HasNextPage ? "" : "disabled")">
-                <a class="page-link" asp-action="History" asp-all-route-data="@Model.RouteValues(page: result.Page + 1)">Sonraki &rsaquo;</a>
-            </li>
-        </ul>
-    </nav>
+        <div class="pager">
+            <span>Toplam @result.TotalCount kayıt</span>
+            <ul class="pagination pagination-sm">
+                <li class="page-item @(result.HasPreviousPage ? "" : "disabled")">
+                    <a class="page-link" asp-action="History" asp-all-route-data="@Model.RouteValues(page: result.Page - 1)">&lsaquo; Önceki</a>
+                </li>
+                <li class="page-item active"><span class="page-link">@result.Page</span></li>
+                <li class="page-item @(result.HasNextPage ? "" : "disabled")">
+                    <a class="page-link" asp-action="History" asp-all-route-data="@Model.RouteValues(page: result.Page + 1)">Sonraki &rsaquo;</a>
+                </li>
+            </ul>
+        </div>
+    </div>
 }

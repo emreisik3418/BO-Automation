@@ -2,6 +2,7 @@
 @inject BoAdmin.Web.Infrastructure.CurrentEnvironmentAccessor CurrentEnvironment
 @{
     ViewData["Title"] = "Toplu Silme Önizleme";
+    ViewData["Subtitle"] = "Raporlar yedek klasörüne {ad}_{CUID} adıyla kopyalanacak, ardından orijinaller silinecek.";
     var p = Model.Preview;
     var toProcess = Model.ToProcess;
     var skipped = Model.Skipped;
@@ -9,12 +10,6 @@
     var instanceTotal = toProcess.Sum(i => i.InstanceCount);
 }
 
-<partial name="_ReportsNav" model="@("Bulk")" />
-
-<h1 class="h5 mb-3">
-    Toplu silme önizleme
-    <span class="badge text-bg-@CurrentEnvironment.Color align-middle ms-1">@CurrentEnvironment.DisplayName</span>
-</h1>
 
 @if (Model.ErrorMessage is not null)
 {
@@ -22,35 +17,35 @@
 }
 
 @* ---------------- Özet ---------------- *@
-<div class="row g-2 mb-3">
+<div class="row g-3 mb-3">
     <div class="col-md-3">
-        <div class="card card-body py-2 shadow-sm">
-            <div class="small text-muted">Dosya</div>
+        <div class="summary-tile">
+            <div class="summary-label">Dosya</div>
             <div class="text-truncate" title="@Model.FileName">@Model.FileName</div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card card-body py-2 shadow-sm">
-            <div class="small text-muted">Yedekleme klasörü</div>
+        <div class="summary-tile">
+            <div class="summary-label">Yedekleme klasörü</div>
             <div>@p.TargetFolder.Path <span class="small text-muted">(ID: @p.TargetFolder.Id)</span></div>
         </div>
     </div>
     <div class="col-md-2">
-        <div class="card card-body py-2 shadow-sm">
-            <div class="small text-muted">Bulunan rapor</div>
-            <div class="fs-5 fw-semibold">@p.Items.Count</div>
+        <div class="summary-tile">
+            <div class="summary-label">Bulunan rapor</div>
+            <div class="summary-value">@p.Items.Count</div>
         </div>
     </div>
     <div class="col-md-2">
-        <div class="card card-body py-2 shadow-sm">
-            <div class="small text-muted">Yedeklenip silinecek</div>
-            <div class="fs-5 fw-semibold">@toProcess.Count</div>
+        <div class="summary-tile">
+            <div class="summary-label">Yedeklenip silinecek</div>
+            <div class="summary-value">@toProcess.Count</div>
         </div>
     </div>
     <div class="col-md-2">
-        <div class="card card-body py-2 shadow-sm">
-            <div class="small text-muted">Bulunamayan CUID</div>
-            <div class="fs-5 fw-semibold @(p.NotFoundCuids.Count > 0 ? "text-danger" : "")">@p.NotFoundCuids.Count</div>
+        <div class="summary-tile">
+            <div class="summary-label">Bulunamayan CUID</div>
+            <div class="summary-value @(p.NotFoundCuids.Count > 0 ? "text-danger" : "")">@p.NotFoundCuids.Count</div>
         </div>
     </div>
 </div>
@@ -104,7 +99,7 @@
 else
 {
     @* ---------------- Rapor listesi ---------------- *@
-    <div class="card shadow-sm mb-3">
+    <div class="card mb-3">
         <div class="card-header">
             Yedeklenip silinecek raporlar: <strong>@toProcess.Count</strong>
             @if (instanceTotal > 0)
@@ -114,9 +109,9 @@ else
                 </span>
             }
         </div>
-        <div class="table-responsive preview-table">
-            <table class="table table-sm mb-0 align-middle">
-                <thead class="table-light">
+        <div class="table-wrap preview-table">
+            <table class="table table-modern align-middle">
+                <thead>
                     <tr>
                         <th>Rapor adı</th>
                         <th>Bulunduğu klasör</th>
@@ -132,14 +127,14 @@ else
                         var r = item.Report;
                         <tr>
                             <td>
-                                @r.Name
-                                <div class="small text-muted font-monospace">@r.Cuid</div>
+                                <div class="cell-title">@r.Name</div>
+                                <div class="cell-sub mono">@r.Cuid</div>
                             </td>
-                            <td class="small text-muted">@r.FolderPath</td>
+                            <td class="cell-sub">@r.FolderPath</td>
                             <td class="small">@item.BackupName</td>
                             <td>@r.Owner</td>
                             <td class="text-end">@item.InstanceCount</td>
-                            <td class="small text-muted">@r.Id</td>
+                            <td class="cell-sub">@r.Id</td>
                         </tr>
                     }
                 </tbody>
@@ -148,7 +143,7 @@ else
     </div>
 
     @* ---------------- Onay ---------------- *@
-    <form method="post" asp-action="BulkExecute" id="bulkForm" class="card card-body shadow-sm">
+    <form method="post" asp-action="BulkExecute" id="bulkForm" class="card card-body">
         <input type="hidden" name="Environment" value="@CurrentEnvironment.Key" />
         <input type="hidden" name="TargetFolderId" value="@p.TargetFolder.Id" />
         @foreach (var item in toProcess)
