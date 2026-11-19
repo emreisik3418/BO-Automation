@@ -35,7 +35,9 @@ public sealed class SidebarViewComponent : ViewComponent
     public IViewComponentResult Invoke()
     {
         var controller = ViewContext.RouteData.Values["controller"]?.ToString();
-        var action = ViewContext.RouteData.Values["action"]?.ToString();
+        // Ortak sayfalar (ilerleme / sonuç) hangi menü öğesine ait olduğunu ViewData["NavAction"] ile bildirir
+        var action = ViewContext.ViewData["NavAction"] as string
+                     ?? ViewContext.RouteData.Values["action"]?.ToString();
 
         var modules = _registry.All
             .Where(m => m.IsAvailable && _accessService.HasAccess(UserClaimsPrincipal, _environment.Key, m.Name))

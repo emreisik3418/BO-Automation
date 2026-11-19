@@ -43,8 +43,9 @@ public sealed class BackgroundJob : IOperationProgress
     private int _fail;
     private DateTime _phaseStartedUtc;
 
-    public BackgroundJob(string title, string owner, EnvironmentInfo environment, int stepCount)
+    public BackgroundJob(string title, string owner, EnvironmentInfo environment, int stepCount, string navAction)
     {
+        NavAction = navAction;
         Title = title;
         Owner = owner;
         Environment = environment;
@@ -54,6 +55,9 @@ public sealed class BackgroundJob : IOperationProgress
 
     public Guid Id { get; } = Guid.NewGuid();
     public string Title { get; }
+
+    /// <summary>İşin ait olduğu sayfa (menüde seçili gösterilir, hata olursa buraya dönülür): "Bulk", "Rename".</summary>
+    public string NavAction { get; }
     public string Owner { get; }
     public EnvironmentInfo Environment { get; }
     public int StepCount { get; }
@@ -173,12 +177,12 @@ public sealed class JobService
     /// hazırlanmış yeni bir DI scope'unda çalışır.
     /// </summary>
     public BackgroundJob Start(
-        string title, string owner, string? ownerDisplayName, EnvironmentInfo environment, int stepCount,
+        string title, string navAction, string owner, string? ownerDisplayName, EnvironmentInfo environment, int stepCount,
         Func<IServiceProvider, IOperationProgress, CancellationToken, Task<object?>> work)
     {
         Cleanup();
 
-        var job = new BackgroundJob(title, owner, environment, stepCount);
+        var job = new BackgroundJob(title, owner, environment, stepCount, navAction);
         _jobs[job.Id] = job;
 
         // İstek bağlamı (HttpContext) arka plan işine taşınmasın

@@ -47,6 +47,9 @@ public interface IBoReportGateway
     /// </summary>
     Task<CopyResult> CopyToFolderAsync(int sourceId, string sourceCuid, string kind, int targetFolderId, string newName, CancellationToken ct = default);
 
+    /// <summary>Raporun adını değiştirir ve yeni adın yazıldığını doğrular.</summary>
+    Task RenameAsync(int id, string newName, CancellationToken ct = default);
+
     Task<IReadOnlyList<FolderDto>> GetFoldersAsync(CancellationToken ct = default);
 
     /// <summary>Klasör bilgisi (yol dahil). Bulunamazsa null.</summary>

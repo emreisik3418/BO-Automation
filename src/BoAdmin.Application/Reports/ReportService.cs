@@ -36,6 +36,14 @@ public interface IReportService
     /// </summary>
     Task<IReadOnlyList<DeleteItemResult>> ExecuteBulkBackupAsync(IReadOnlyCollection<int> reportIds, int targetFolderId, int confirmationCount,
         IOperationProgress? progress = null);
+
+    /// <summary>Excel satırlarındaki CUID'leri çözer, yeni adları doğrular ve önizleme döndürür.</summary>
+    Task<RenamePreviewDto> PrepareRenameAsync(IReadOnlyList<RenameRow> rows, IReadOnlyList<RenameRowIssue> fileIssues,
+        IOperationProgress? progress = null, CancellationToken ct = default);
+
+    /// <summary>Onaylanan ad değişikliklerini uygular. Her rapor ayrı işlenir ve audit'e yazılır.</summary>
+    Task<IReadOnlyList<DeleteItemResult>> ExecuteRenameAsync(IReadOnlyList<RenameRequest> requests, int confirmationCount,
+        IOperationProgress? progress = null);
 }
 
 public sealed class ReportService : IReportService
@@ -228,6 +236,176 @@ public sealed class ReportService : IReportService
         var folder = await GetTargetFolderAsync(targetFolderId, CancellationToken.None);
         return await RunBatchAsync(ids, ReportOperation.BackupCopy, deleteInstances: false, folder, progress,
             "Raporlar yedekleniyor ve siliniyor");
+    }
+
+    // ------------------------------------------------------------------
+    // Excel ile toplu ad güncelleme
+    // ------------------------------------------------------------------
+
+    /// <summary>Ad güncelleme önizlemesi adım sayısı.</summary>
+    public const int RenamePreviewSteps = 3;
+
+    /// <summary>Ad güncelleme adım sayısı.</summary>
+    public const int RenameExecuteSteps = 2;
+
+    public async Task<RenamePreviewDto> PrepareRenameAsync(IReadOnlyList<RenameRow> rows, IReadOnlyList<RenameRowIssue> fileIssues,
+        IOperationProgress? progress = null, CancellationToken ct = default)
+    {
+        progress ??= NullOperationProgress.Instance;
+
+        progress.Phase("Excel satırları kontrol ediliyor", rows.Count);
+        var invalid = new List<RenameRowIssue>(fileIssues);
+        var valid = new List<RenameRow>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var row in rows)
+        {
+            progress.Step();
+
+            var nameError = ValidateNewName(row.NewName);
+            if (nameError is not null)
+            {
+                invalid.Add(new RenameRowIssue(row.RowNumber, row.Cuid, nameError));
+                continue;
+            }
+
+            if (!seen.Add(row.Cuid))
+            {
+                invalid.Add(new RenameRowIssue(row.RowNumber, row.Cuid, "Bu CUID dosyada daha önce geçiyor; yalnızca ilk satır işlenir."));
+                continue;
+            }
+
+            valid.Add(row with { NewName = row.NewName.Trim() });
+        }
+
+        if (valid.Count == 0)
+            throw new AppValidationException(invalid.Count > 0
+                ? $"Excel'de işlenebilecek satır yok ({invalid.Count} satır hatalı). İlk hata: satır {invalid[0].RowNumber} - {invalid[0].Reason}"
+                : "Excel'de CUID ve yeni ad içeren satır bulunamadı.");
+
+        if (valid.Count > MaxBulkSize)
+            throw new AppValidationException(
+                $"Tek seferde en fazla {MaxBulkSize} rapor işlenebilir. Dosyada: {valid.Count}. Lütfen dosyayı bölün.");
+
+        progress.Phase("Raporlar BO'da aranıyor", valid.Count);
+        var reports = new List<ReportListItemDto>();
+        foreach (var chunk in valid.Select(r => r.Cuid).Chunk(LookupChunkSize))
+        {
+            reports.AddRange(await _gateway.GetReportsByCuidsAsync(chunk, ct));
+            for (var i = 0; i < chunk.Length; i++) progress.Step();
+        }
+
+        progress.Phase("Önizleme hazırlanıyor");
+        var byCuid = reports.Where(r => r.Cuid is not null)
+            .GroupBy(r => r.Cuid!, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+        var items = new List<RenamePreviewItemDto>();
+        var notFound = new List<RenameRowIssue>();
+
+        foreach (var row in valid)
+        {
+            if (!byCuid.TryGetValue(row.Cuid, out var report))
+            {
+                notFound.Add(new RenameRowIssue(row.RowNumber, row.Cuid, "Bu ortamda bulunamadı veya desteklenen bir rapor türü değil."));
+                continue;
+            }
+
+            items.Add(string.Equals(report.Name, row.NewName, StringComparison.Ordinal)
+                ? new RenamePreviewItemDto(row.RowNumber, report, row.NewName, false, "Yeni ad mevcut adla aynı.")
+                : new RenamePreviewItemDto(row.RowNumber, report, row.NewName, true));
+        }
+
+        return new RenamePreviewDto(items, notFound, invalid.OrderBy(i => i.RowNumber).ToList());
+    }
+
+    public async Task<IReadOnlyList<DeleteItemResult>> ExecuteRenameAsync(IReadOnlyList<RenameRequest> requests, int confirmationCount,
+        IOperationProgress? progress = null)
+    {
+        progress ??= NullOperationProgress.Instance;
+        var ct = CancellationToken.None; // yarıda kalmasın
+
+        var distinct = requests.Where(r => r.ReportId > 0).GroupBy(r => r.ReportId).Select(g => g.First()).ToList();
+        var ids = ValidateIds(distinct.Select(r => r.ReportId).ToList(), MaxBulkSize);
+        ValidateConfirmation(confirmationCount, ids.Count);
+
+        progress.Phase("Raporlar doğrulanıyor");
+        var reports = (await _gateway.GetReportsByIdsAsync(ids, ct)).ToDictionary(r => r.Id);
+        var batchId = Guid.NewGuid();
+
+        _logger.LogInformation("Toplu ad güncelleme başladı. Batch: {BatchId}, Ortam: {Environment}, Kullanıcı: {User}, Rapor: {Count}",
+            batchId, _environment.Key, _currentUser.UserName, ids.Count);
+
+        progress.Phase("Rapor adları güncelleniyor", distinct.Count);
+        var results = new List<DeleteItemResult>(distinct.Count);
+
+        foreach (var request in distinct)
+        {
+            DeleteItemResult result;
+            reports.TryGetValue(request.ReportId, out var report);
+
+            if (report is null)
+            {
+                result = new DeleteItemResult(request.ReportId, $"(ID: {request.ReportId})", null, ReportOperation.Rename, false,
+                    "Rapor bulunamadı veya desteklenen bir rapor türü değil.");
+            }
+            else
+            {
+                progress.Current(report.Name);
+                var newName = request.NewName.Trim();
+                var nameError = ValidateNewName(newName);
+
+                if (nameError is not null)
+                {
+                    result = new DeleteItemResult(report.Id, report.Name, report.FolderPath, ReportOperation.Rename, false, nameError);
+                }
+                else if (string.Equals(report.Name, newName, StringComparison.Ordinal))
+                {
+                    result = new DeleteItemResult(report.Id, report.Name, report.FolderPath, ReportOperation.Rename, false,
+                        "Yeni ad mevcut adla aynı; işlem yapılmadı.");
+                }
+                else
+                {
+                    try
+                    {
+                        await _gateway.RenameAsync(report.Id, newName, ct);
+                        result = new DeleteItemResult(report.Id, report.Name, report.FolderPath, ReportOperation.Rename, true,
+                            $"Ad güncellendi: '{report.Name}' → '{newName}'");
+                    }
+                    catch (Exception ex) when (ex is BoException or AppValidationException)
+                    {
+                        _logger.LogWarning(ex, "Ad güncellenemedi. Rapor: {ReportId} {ReportName}", report.Id, report.Name);
+                        result = new DeleteItemResult(report.Id, report.Name, report.FolderPath, ReportOperation.Rename, false,
+                            $"Ad güncellenemedi: {UserMessageOf(ex)}");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Ad güncellemede beklenmeyen hata. Rapor: {ReportId}", report.Id);
+                        result = new DeleteItemResult(report.Id, report.Name, report.FolderPath, ReportOperation.Rename, false,
+                            $"Beklenmeyen hata: {ex.Message}");
+                    }
+                }
+            }
+
+            results.Add(result);
+            await WriteAuditAsync(result, report, null, batchId);
+            progress.Step(result.ReportName, result.Success);
+        }
+
+        _logger.LogInformation("Toplu ad güncelleme bitti. Batch: {BatchId}, Başarılı: {Ok}, Başarısız: {Fail}",
+            batchId, results.Count(r => r.Success), results.Count(r => !r.Success));
+
+        return results;
+    }
+
+    /// <summary>Yeni ad kuralları. Hata yoksa null.</summary>
+    public static string? ValidateNewName(string? name)
+    {
+        var value = name?.Trim() ?? string.Empty;
+        if (value.Length == 0) return "Yeni ad boş.";
+        if (value.Length > MaxObjectNameLength) return $"Yeni ad en fazla {MaxObjectNameLength} karakter olabilir ({value.Length}).";
+        if (value.Any(char.IsControl)) return "Yeni ad satır sonu veya görünmeyen karakter içeriyor.";
+        return null;
     }
 
     /// <summary>Yedek kopyanın adı: "{orijinal ad}_{orijinal CUID}". Uzunsa orijinal ad kısaltılır, CUID korunur.</summary>

@@ -159,6 +159,35 @@ public sealed class BulkPreviewViewModel
     public IReadOnlyList<BulkPreviewItemDto> Skipped => Preview.Skipped;
 }
 
+// ----------------------------------------------------------------------
+// Excel ile toplu ad güncelleme
+// ----------------------------------------------------------------------
+
+public sealed class RenameUploadViewModel
+{
+    public string? ErrorMessage { get; set; }
+    public int MaxCount => ReportService.MaxBulkSize;
+}
+
+public sealed class RenamePreviewViewModel
+{
+    public RenamePreviewViewModel(RenamePreviewDto preview) => Preview = preview;
+
+    public RenamePreviewDto Preview { get; }
+    public string? FileName { get; set; }
+    public string? EnvironmentKey { get; set; }
+
+    /// <summary>Önizlemeyi hazırlayan iş; onayda değişiklikler buradan alınır.</summary>
+    public Guid PreviewJobId { get; set; }
+}
+
+public sealed class RenameExecuteModel
+{
+    public string Environment { get; set; } = string.Empty;
+    public Guid PreviewJobId { get; set; }
+    public int ConfirmationCount { get; set; }
+}
+
 /// <summary>Arka plan işinin ilerleme ekranı.</summary>
 public sealed record JobViewModel(
     Guid Id,
@@ -221,6 +250,7 @@ public static class OperationNames
         (nameof(ReportOperation.Delete), "Silme"),
         (nameof(ReportOperation.Archive), "Arşive taşıma"),
         (nameof(ReportOperation.BackupCopy), "Toplu yedekle + sil (TXT)"),
+        (nameof(ReportOperation.Rename), "Ad güncelleme"),
     };
 
     public static string Get(string? operation) => operation switch
@@ -229,6 +259,7 @@ public static class OperationNames
         nameof(ReportOperation.Archive) => "Arşive taşıma",
         nameof(ReportOperation.DeleteInstance) => "Instance silme",
         nameof(ReportOperation.BackupCopy) => "Toplu yedekle + sil (TXT)",
+        nameof(ReportOperation.Rename) => "Ad güncelleme",
         "BackupMove" => "Toplu yedekleme (TXT, taşıma)", // eski kayıtlar
         _ => operation ?? string.Empty
     };

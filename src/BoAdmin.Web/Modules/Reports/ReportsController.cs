@@ -23,6 +23,10 @@ namespace BoAdmin.Web.Modules.Reports;
 ///  GET  /Reports/Bulk           -> TXT ile toplu yedekleme: dosya yükleme
 ///  POST /Reports/BulkPreview    -> TXT önizleme (arka plan işi başlatır)
 ///  POST /Reports/BulkExecute    -> yedek klasörüne kopyala ({ad}_{CUID}) + orijinali sil (arka plan işi)
+///  GET  /Reports/Rename         -> Excel ile toplu ad güncelleme: dosya yükleme
+///  GET  /Reports/RenameTemplate -> boş Excel şablonu
+///  POST /Reports/RenamePreview  -> Excel önizleme (arka plan işi)
+///  POST /Reports/RenameExecute  -> ad güncelleme (arka plan işi)
 ///  GET  /Reports/Job/{id}       -> ilerleme ekranı
 ///  GET  /Reports/JobStatus/{id} -> ilerleme durumu (JSON, saniyede bir sorulur)
 ///  GET  /Reports/JobResult/{id} -> iş bitince sonuç (önizleme veya sonuç sayfası)
@@ -34,6 +38,7 @@ public sealed class ReportsController : Controller
 {
     private const int MaxExportRows = 10_000;
     private const long MaxUploadBytes = 1024 * 1024; // 1 MB
+    private const long MaxExcelBytes = 5 * 1024 * 1024; // 5 MB
 
     private readonly IReportService _reports;
     private readonly IAuditLogService _audit;
@@ -217,7 +222,7 @@ public sealed class ReportsController : Controller
         var folderId = targetFolderId.Value;
         var env = _environmentAccessor.Current;
 
-        var job = _jobs.Start("Toplu silme önizlemesi hazırlanıyor", _currentUser.UserName, _currentUser.DisplayName,
+        var job = _jobs.Start("Toplu silme önizlemesi hazırlanıyor", nameof(Bulk), _currentUser.UserName, _currentUser.DisplayName,
             env, ReportService.BulkPreviewSteps,
             async (sp, progress, jobCt) =>
             {
@@ -246,13 +251,119 @@ public sealed class ReportsController : Controller
         var folderId = model.TargetFolderId;
         var confirmation = model.ConfirmationCount;
 
-        var job = _jobs.Start($"{ids.Count} rapor yedeklenip siliniyor", _currentUser.UserName, _currentUser.DisplayName,
+        var job = _jobs.Start($"{ids.Count} rapor yedeklenip siliniyor", nameof(Bulk), _currentUser.UserName, _currentUser.DisplayName,
             _environmentAccessor.Current, ReportService.BulkExecuteSteps,
             async (sp, progress, _) =>
             {
                 var service = sp.GetRequiredService<IReportService>();
                 var results = await service.ExecuteBulkBackupAsync(ids, folderId, confirmation, progress);
                 return new DeleteResultViewModel(results, ReportOperation.BackupCopy);
+            });
+
+        return RedirectToAction(nameof(Job), new { id = job.Id });
+    }
+
+    // ------------------------------------------------------------------
+    // Excel ile toplu ad güncelleme
+    // ------------------------------------------------------------------
+
+    [HttpGet]
+    public IActionResult Rename() => View(new RenameUploadViewModel());
+
+    [HttpGet]
+    public IActionResult RenameTemplate() =>
+        File(RenameFileReader.CreateTemplate(),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "rapor-ad-guncelleme-sablonu.xlsx");
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    [RequestSizeLimit(MaxExcelBytes + 64 * 1024)]
+    public async Task<IActionResult> RenamePreview(IFormFile? file, CancellationToken ct)
+    {
+        var form = new RenameUploadViewModel();
+
+        if (file is null || file.Length == 0)
+        {
+            form.ErrorMessage = "Lütfen CUID ve yeni adları içeren bir Excel dosyası (.xlsx) seçin.";
+            return View("Rename", form);
+        }
+
+        var ext = Path.GetExtension(file.FileName);
+        if (!string.Equals(ext, ".xlsx", StringComparison.OrdinalIgnoreCase) && !string.Equals(ext, ".xlsm", StringComparison.OrdinalIgnoreCase))
+        {
+            form.ErrorMessage = "Yalnızca .xlsx dosyası yüklenebilir. Eski .xls dosyasını Excel'de 'Farklı Kaydet > .xlsx' ile dönüştürün.";
+            return View("Rename", form);
+        }
+
+        if (file.Length > MaxExcelBytes)
+        {
+            form.ErrorMessage = "Dosya en fazla 5 MB olabilir.";
+            return View("Rename", form);
+        }
+
+        RenameFileReader.ReadResult read;
+        try
+        {
+            await using var ms = new MemoryStream();
+            await file.CopyToAsync(ms, ct);
+            ms.Position = 0;
+            read = RenameFileReader.Read(ms);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            form.ErrorMessage = "Excel dosyası okunamadı. Dosyanın bozuk veya parola korumalı olmadığından emin olun.";
+            return View("Rename", form);
+        }
+
+        var fileName = Path.GetFileName(file.FileName);
+        var env = _environmentAccessor.Current;
+
+        var job = _jobs.Start("Ad güncelleme önizlemesi hazırlanıyor", nameof(Rename), _currentUser.UserName, _currentUser.DisplayName,
+            env, ReportService.RenamePreviewSteps,
+            async (sp, progress, jobCt) =>
+            {
+                var service = sp.GetRequiredService<IReportService>();
+                var preview = await service.PrepareRenameAsync(read.Rows, read.Issues, progress, jobCt);
+                return new RenamePreviewViewModel(preview) { FileName = fileName, EnvironmentKey = env.Key };
+            });
+
+        return RedirectToAction(nameof(Job), new { id = job.Id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public IActionResult RenameExecute(RenameExecuteModel model)
+    {
+        if (!EnvironmentMatches(model.Environment, out var redirect, nameof(Rename)))
+            return redirect;
+
+        // Değişiklikler formdan değil, sunucudaki önizlemeden alınır (değiştirilemez)
+        var previewJob = _jobs.Get(model.PreviewJobId, _currentUser.UserName);
+        if (previewJob?.Result is not RenamePreviewViewModel preview)
+        {
+            TempData["Warning"] = "Önizleme bulunamadı veya süresi doldu. Lütfen Excel dosyasını yeniden yükleyin.";
+            return RedirectToAction(nameof(Rename));
+        }
+
+        var requests = preview.Preview.Processable
+            .Select(i => new RenameRequest(i.Report.Id, i.NewName))
+            .ToList();
+
+        if (requests.Count == 0 || model.ConfirmationCount != requests.Count)
+        {
+            TempData["Warning"] = $"Onay için yazılan sayı ({model.ConfirmationCount}) güncellenecek rapor sayısıyla ({requests.Count}) eşleşmiyor.";
+            return RedirectToAction(nameof(JobResult), new { id = model.PreviewJobId });
+        }
+
+        var confirmation = model.ConfirmationCount;
+        var job = _jobs.Start($"{requests.Count} raporun adı güncelleniyor", nameof(Rename), _currentUser.UserName, _currentUser.DisplayName,
+            _environmentAccessor.Current, ReportService.RenameExecuteSteps,
+            async (sp, progress, _) =>
+            {
+                var service = sp.GetRequiredService<IReportService>();
+                var results = await service.ExecuteRenameAsync(requests, confirmation, progress);
+                return new DeleteResultViewModel(results, ReportOperation.Rename);
             });
 
         return RedirectToAction(nameof(Job), new { id = job.Id });
@@ -272,9 +383,10 @@ public sealed class ReportsController : Controller
             return RedirectToAction(nameof(Bulk));
         }
 
+        ViewData["NavAction"] = job.NavAction;
         return View(new JobViewModel(job.Id, job.Title, job.Environment,
             Url.Action(nameof(JobStatus), new { id })!, Url.Action(nameof(JobResult), new { id })!,
-            Url.Action(nameof(Bulk))!));
+            Url.Action(job.NavAction)!));
     }
 
     [HttpGet("Reports/JobStatus/{id:guid}")]
@@ -319,15 +431,23 @@ public sealed class ReportsController : Controller
         if (job.State == JobState.Failed)
         {
             TempData["Warning"] = job.Error;
-            return RedirectToAction(nameof(Bulk));
+            return RedirectToAction(job.NavAction);
         }
 
-        return job.Result switch
+        ViewData["NavAction"] = job.NavAction;
+
+        switch (job.Result)
         {
-            BulkPreviewViewModel preview => (IActionResult)View("BulkPreview", preview),
-            DeleteResultViewModel result => View("DeleteResult", result),
-            _ => RedirectToAction(nameof(Bulk))
-        };
+            case BulkPreviewViewModel bulkPreview:
+                return View("BulkPreview", bulkPreview);
+            case RenamePreviewViewModel renamePreview:
+                renamePreview.PreviewJobId = job.Id;
+                return View("RenamePreview", renamePreview);
+            case DeleteResultViewModel result:
+                return View("DeleteResult", result);
+            default:
+                return RedirectToAction(job.NavAction);
+        }
     }
 
     // ------------------------------------------------------------------

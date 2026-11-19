@@ -1,0 +1,61 @@
+@using BoAdmin.Web.Infrastructure
+@model RenameUploadViewModel
+@{
+    ViewData["Title"] = "Rapor Adı Güncelleme";
+    ViewData["Subtitle"] = "Excel'deki CUID ve yeni ad listesiyle raporları toplu olarak yeniden adlandırın.";
+}
+
+<div class="row g-4">
+    <div class="col-xxl-7 col-xl-8">
+        @if (Model.ErrorMessage is not null)
+        {
+            <div class="alert alert-danger">@Model.ErrorMessage</div>
+        }
+
+        <form method="post" asp-action="RenamePreview" enctype="multipart/form-data" class="card" data-busy-form>
+            <div class="card-body">
+                <label for="file" class="form-label">Excel dosyası (.xlsx)</label>
+                <input type="file" class="form-control" id="file" name="file"
+                       accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required />
+                <div class="form-text mb-3">
+                    İlk sayfa okunur. Bir sütunda raporun <strong>CUID</strong>'i, diğerinde <strong>yeni adı</strong> olmalı.
+                    En fazla @Model.MaxCount rapor, 5 MB.
+                </div>
+
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="submit" class="btn btn-primary" data-busy-text="Dosya yükleniyor...">@Icons.Get("upload", 16) Önizle</button>
+                    <a asp-action="RenameTemplate" class="btn btn-outline-success">@Icons.Get("download", 16) Boş şablonu indir</a>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <div class="col-xxl-5 col-xl-4">
+        <div class="card">
+            <div class="card-header">Excel biçimi</div>
+            <div class="card-body">
+                <div class="table-wrap border rounded mb-3">
+                    <table class="table table-modern mb-0">
+                        <thead>
+                            <tr><th>CUID</th><th>Yeni Ad</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td class="mono">AW40QpsIInZGuxU7JobhPk0</td><td>Yatırım Fonları Bakiye - Günlük</td></tr>
+                            <tr><td class="mono">AQ8aoL8XYyRC1X19n5gM9L8</td><td>Yabancı Hisse Senedi Raporu v2</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <ul class="small text-muted mb-0 ps-3">
+                    <li>Sütunlar başlıklarından bulunur: başlığında "CUID" ve "Yeni" (ya da "Ad") geçen sütunlar. Başlık yoksa A = CUID, B = yeni ad.</li>
+                    <li>Aynı CUID birden fazla satırda varsa yalnızca ilk satır işlenir.</li>
+                    <li>Yeni adı mevcut adla aynı olan raporlar atlanır.</li>
+                    <li>Önizlemede eski ve yeni adları görüp onaylamadan hiçbir rapor değiştirilmez.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/reports.js" asp-append-version="true"></script>
+}

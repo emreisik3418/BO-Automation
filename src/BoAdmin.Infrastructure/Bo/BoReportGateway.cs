@@ -310,6 +310,111 @@ public sealed class BoReportGateway : IBoReportGateway
     }
 
     // ------------------------------------------------------------------
+    // Ad güncelleme (Excel ile toplu)
+    // ------------------------------------------------------------------
+
+    /// <summary>Ortam bazında çalıştığı görülen ad güncelleme uç noktası.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> WorkingRenameEndpoint =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Ad güncelleme için denenen uç noktalar (sırayla; çalışan ortam bazında hatırlanır):
+    ///   1) GET + PUT /v1/documents/{id}    (nesnenin JSON'u okunur, "name" değiştirilip geri yazılır)
+    ///   2) GET + PUT /v1/infoobjects/{id}
+    /// Her denemeden sonra yeni ad CMS sorgusuyla doğrulanır; değişmediyse sıradaki denenir.
+    /// </summary>
+    public async Task RenameAsync(int id, string newName, CancellationToken ct = default)
+    {
+        var environment = _client.EnvironmentKey;
+        var endpoints = new List<string>();
+        if (WorkingRenameEndpoint.TryGetValue(environment, out var known)) endpoints.Add(known);
+        endpoints.AddRange(new[] { "v1/documents", "v1/infoobjects" });
+
+        var errors = new List<string>();
+
+        foreach (var endpoint in endpoints.Distinct())
+        {
+            var path = $"{endpoint}/{id}";
+            try
+            {
+                var current = await _client.GetJsonAsync(path, ct);
+                var body = BuildRenameBody(current, newName);
+                if (body is null)
+                {
+                    errors.Add($"{endpoint}: yanıtta 'name' alanı yok");
+                    continue;
+                }
+
+                await _client.PutJsonAsync(path, body, ct);
+            }
+            catch (BoException ex) when (ex is BoNotFoundException or BoOperationException)
+            {
+                _logger.LogInformation("Ad güncelleme uç noktası başarısız: {Path} ({Message}). Sıradaki deneniyor.", path, ex.Message);
+                errors.Add($"{endpoint}: {ex.Message}");
+                continue;
+            }
+
+            // Doğrulama
+            var after = await GetObjectAsync(id, ct);
+            var actual = after?.GetString("SI_NAME");
+            if (string.Equals(actual, newName, StringComparison.Ordinal))
+            {
+                WorkingRenameEndpoint[environment] = endpoint;
+                _logger.LogInformation("Rapor adı güncellendi: {Id} -> '{Name}' ({Endpoint})", id, newName, endpoint);
+                return;
+            }
+
+            _logger.LogWarning("Ad güncelleme isteği kabul edildi ama ad değişmedi: {Path}. BO'daki ad: '{Actual}'", path, actual);
+            errors.Add($"{endpoint}: istek kabul edildi ama ad değişmedi");
+        }
+
+        throw new BoOperationException("Ad güncellenemedi (" + string.Join("; ", errors) + ").");
+    }
+
+    /// <summary>
+    /// GET yanıtındaki nesnenin "name" alanını değiştirir. Ad kökte veya tek bir sarmalayıcı nesnenin
+    /// içinde olabilir ({ "document": { "name": ... } }). "__metadata" gibi salt-okunur alanlar çıkarılır.
+    /// </summary>
+    private static System.Text.Json.Nodes.JsonObject? BuildRenameBody(System.Text.Json.JsonElement current, string newName)
+    {
+        if (current.ValueKind != System.Text.Json.JsonValueKind.Object) return null;
+
+        var root = System.Text.Json.Nodes.JsonNode.Parse(current.GetRawText()) as System.Text.Json.Nodes.JsonObject;
+        if (root is null) return null;
+
+        root.Remove("__metadata");
+
+        System.Text.Json.Nodes.JsonObject? target = null;
+        var nameKey = root.Select(p => p.Key).FirstOrDefault(k => string.Equals(k, "name", StringComparison.OrdinalIgnoreCase));
+        if (nameKey is not null)
+        {
+            target = root;
+        }
+        else
+        {
+            foreach (var (_, value) in root)
+            {
+                if (value is System.Text.Json.Nodes.JsonObject inner)
+                {
+                    var innerKey = inner.Select(p => p.Key).FirstOrDefault(k => string.Equals(k, "name", StringComparison.OrdinalIgnoreCase));
+                    if (innerKey is not null)
+                    {
+                        inner.Remove("__metadata");
+                        target = inner;
+                        nameKey = innerKey;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (target is null || nameKey is null) return null;
+
+        target[nameKey] = newName;
+        return root;
+    }
+
+    // ------------------------------------------------------------------
     // Kopyalama (TXT ile toplu yedekleme)
     // ------------------------------------------------------------------
 

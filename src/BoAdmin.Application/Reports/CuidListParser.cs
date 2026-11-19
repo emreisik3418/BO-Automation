@@ -22,6 +22,10 @@ public static partial class CuidListParser
     [GeneratedRegex(@"[,;\s]+")]
     private static partial Regex Separators();
 
+    /// <summary>Tek bir değerin CUID biçimine uyup uymadığı.</summary>
+    public static bool IsValidCuid(string? value) =>
+        !string.IsNullOrWhiteSpace(value) && CuidPattern().IsMatch(value.Trim());
+
     public static CuidParseResult Parse(string content)
     {
         var cuids = new List<string>();

@@ -87,7 +87,10 @@ public enum ReportOperation
     DeleteInstance,
 
     /// <summary>TXT ile toplu işlem: yedek klasörüne kopyala (adı_CUID), sonra orijinali sil</summary>
-    BackupCopy
+    BackupCopy,
+
+    /// <summary>Excel ile toplu ad güncelleme</summary>
+    Rename
 }
 
 /// <summary>Toplu yedekleme önizlemesindeki bir rapor.</summary>
@@ -122,3 +125,33 @@ public sealed record DeleteItemResult(
     string Message,
     int InstancesDeleted = 0,
     int InstancesFailed = 0);
+
+// ----------------------------------------------------------------------
+// Excel ile toplu ad güncelleme
+// ----------------------------------------------------------------------
+
+/// <summary>Excel'deki bir satır: CUID + yeni ad. RowNumber kullanıcıya hata göstermek için.</summary>
+public sealed record RenameRow(int RowNumber, string Cuid, string NewName);
+
+/// <summary>Excel'de işlenemeyen satır.</summary>
+public sealed record RenameRowIssue(int RowNumber, string? Cuid, string Reason);
+
+/// <summary>Ad güncelleme önizlemesindeki bir rapor.</summary>
+public sealed record RenamePreviewItemDto(
+    int RowNumber,
+    ReportListItemDto Report,
+    string NewName,
+    bool CanProcess,
+    string? Reason = null);
+
+public sealed record RenamePreviewDto(
+    IReadOnlyList<RenamePreviewItemDto> Items,
+    IReadOnlyList<RenameRowIssue> NotFound,
+    IReadOnlyList<RenameRowIssue> InvalidRows)
+{
+    public IReadOnlyList<RenamePreviewItemDto> Processable => Items.Where(i => i.CanProcess).ToList();
+    public IReadOnlyList<RenamePreviewItemDto> Skipped => Items.Where(i => !i.CanProcess).ToList();
+}
+
+/// <summary>Onaylanan tek bir ad değişikliği.</summary>
+public sealed record RenameRequest(int ReportId, string NewName);

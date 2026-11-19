@@ -879,3 +879,6 @@ a.sort-link:hover { color: var(--app-brand); }
 @media (prefers-reduced-motion: reduce) {
     .job-bar.is-indeterminate .job-bar-fill, .job-spinner .icon, .btn-spinner { animation: none; }
 }
+
+/* Ad güncelleme önizlemesi */
+.rename-new { color: var(--app-brand); }

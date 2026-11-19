@@ -76,6 +76,9 @@ prod'da `D:\Logs\BoAdmin\audit`. IIS app pool kimliğine bu klasörde **Modify**
   `{rapor adı}_{orijinal CUID}` adıyla kopyalanır (Raylight, yalnızca Web Intelligence), kopya doğrulanınca
   orijinal silinir. Kopya oluşmazsa orijinale dokunulmaz; yeniden çalıştırmada var olan yedek tekrar kopyalanmaz.
   Kopya yeni CUID alır, instance ve zamanlamalar kopyalanmaz. En fazla 500 CUID.
+- **Rapor Adı Güncelleme (Excel):** CUID + yeni ad içeren .xlsx yüklenir (şablon indirilebilir), önizlemede eski/yeni
+  adlar görülür ve sayı yazılarak onaylanır. Ad, `GET + PUT /v1/documents/{id}` (olmazsa `/v1/infoobjects/{id}`) ile
+  güncellenir ve CMS sorgusuyla doğrulanır. CUID, klasör, instance ve zamanlamalar değişmez. En fazla 500 rapor.
 - **İşlem Geçmişi:** ortam bazlı filtre, CSV dışa aktarma
 
 ## Kod parçaları (ilerleme)

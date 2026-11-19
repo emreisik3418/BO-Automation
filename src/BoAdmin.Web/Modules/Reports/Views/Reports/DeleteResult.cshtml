@@ -4,6 +4,7 @@
 @{
     ViewData["Title"] = Model.OperationText + " sonucu";
     var isBulk = Model.Operation == ReportOperation.BackupCopy;
+    var isRename = Model.Operation == ReportOperation.Rename;
 }
 
 <div class="row g-3 mb-3">
@@ -63,6 +64,10 @@
     @if (isBulk)
     {
         <a asp-action="Bulk" class="btn btn-primary">Yeni toplu işlem</a>
+    }
+    else if (isRename)
+    {
+        <a asp-action="Rename" class="btn btn-primary">Yeni ad güncelleme</a>
     }
     else
     {

@@ -91,6 +91,16 @@
                     </a>
                 </div>
                 <div class="col-md-6">
+                    <a class="action-card" asp-controller="Reports" asp-action="Rename">
+                        <span class="stat-icon tone-brand">@Icons.Get("edit")</span>
+                        <span>
+                            <span class="action-title d-block">Rapor adı güncelleme</span>
+                            <span class="action-text d-block">Excel'deki CUID ve yeni ad listesiyle raporları toplu yeniden adlandırın.</span>
+                        </span>
+                        @Icons.Get("arrow-right", 18, "action-arrow")
+                    </a>
+                </div>
+                <div class="col-md-6">
                     <a class="action-card" asp-controller="Reports" asp-action="Index" asp-all-route-data="@ReportSearchViewModel.QuickFilter(lastDays: 7)">
                         <span class="stat-icon tone-success">@Icons.Get("calendar")</span>
                         <span>
