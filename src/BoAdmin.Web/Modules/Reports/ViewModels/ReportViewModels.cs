@@ -249,7 +249,7 @@ public static class OperationNames
     {
         (nameof(ReportOperation.Delete), "Silme"),
         (nameof(ReportOperation.Archive), "Arşive taşıma"),
-        (nameof(ReportOperation.BackupCopy), "Toplu yedekle + sil (TXT)"),
+        (nameof(ReportOperation.BackupCopy), "Rapor silme (yedekle + sil)"),
         (nameof(ReportOperation.Rename), "Ad güncelleme"),
     };
 
@@ -258,7 +258,7 @@ public static class OperationNames
         nameof(ReportOperation.Delete) => "Silme",
         nameof(ReportOperation.Archive) => "Arşive taşıma",
         nameof(ReportOperation.DeleteInstance) => "Instance silme",
-        nameof(ReportOperation.BackupCopy) => "Toplu yedekle + sil (TXT)",
+        nameof(ReportOperation.BackupCopy) => "Rapor silme (yedekle + sil)",
         nameof(ReportOperation.Rename) => "Ad güncelleme",
         "BackupMove" => "Toplu yedekleme (TXT, taşıma)", // eski kayıtlar
         _ => operation ?? string.Empty

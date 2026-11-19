@@ -222,7 +222,7 @@ public sealed class ReportsController : Controller
         var folderId = targetFolderId.Value;
         var env = _environmentAccessor.Current;
 
-        var job = _jobs.Start("Toplu silme önizlemesi hazırlanıyor", nameof(Bulk), _currentUser.UserName, _currentUser.DisplayName,
+        var job = _jobs.Start("Rapor silme önizlemesi hazırlanıyor", nameof(Bulk), _currentUser.UserName, _currentUser.DisplayName,
             env, ReportService.BulkPreviewSteps,
             async (sp, progress, jobCt) =>
             {
