@@ -7,14 +7,22 @@
     <RootNamespace>BoAdmin.Web</RootNamespace>
     <!-- Geliştirmede BO şifresi User Secrets'ta tutulur (Sağ tık > Manage User Secrets) -->
     <UserSecretsId>boadmin-web-7c3e2a9d</UserSecretsId>
+    <!-- Yayında üretilen exe'nin adı: BoAdmin.exe -->
+    <AssemblyName>BoAdmin</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="ClosedXML" Version="0.104.2" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Negotiate" Version="8.0.*" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.*" />
     <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
     <PackageReference Include="System.DirectoryServices.AccountManagement" Version="8.0.1" />
     <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+  </ItemGroup>
+
+  <!-- Sunucu kurulum betikleri yayın klasörüne exe'nin yanına kopyalanır -->
+  <ItemGroup>
+    <None Include="..\..\deploy\*.ps1" Link="%(Filename)%(Extension)" CopyToPublishDirectory="PreserveNewest" CopyToOutputDirectory="Never" />
   </ItemGroup>
 
   <ItemGroup>

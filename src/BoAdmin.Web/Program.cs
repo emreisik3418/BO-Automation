@@ -18,7 +18,19 @@ try
 {
     Log.Information("BoAdmin başlatılıyor...");
 
-    var builder = WebApplication.CreateBuilder(args);
+    // Exe başka bir klasörden veya Windows servisi olarak çalıştırıldığında da
+    // appsettings ve wwwroot exe'nin yanındaki klasörden okunur.
+    // (VS'de geliştirmede bin altında wwwroot olmadığı için proje klasörü kullanılır.)
+    var exeFolder = AppContext.BaseDirectory;
+    var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+    {
+        Args = args,
+        ContentRootPath = Directory.Exists(Path.Combine(exeFolder, "wwwroot")) ? exeFolder : null
+    });
+
+    // Windows servisi olarak kurulursa servis yaşam döngüsüne bağlanır; exe çift tıkla/konsoldan
+    // çalıştırıldığında etkisizdir.
+    builder.Host.UseWindowsService(options => options.ServiceName = "BoAdmin");
 
     // ---------------------------------------------------------------
     // Loglama (Serilog) - ayarlar appsettings.json > "Serilog"
@@ -30,7 +42,7 @@ try
 
     // ---------------------------------------------------------------
     // Kimlik doğrulama: Windows Authentication (Negotiate)
-    // IIS'te IIS'in Windows Auth'u, VS/Kestrel'de Negotiate handler'ı çalışır.
+    // Exe (Kestrel) olarak çalışırken Negotiate handler'ı Kerberos/NTLM ile kullanıcıyı tanır.
     // ---------------------------------------------------------------
     builder.Services
         .AddAuthentication(NegotiateDefaults.AuthenticationScheme)
@@ -74,10 +86,15 @@ try
     // ---------------------------------------------------------------
     // HTTP pipeline
     // ---------------------------------------------------------------
+    // HTTPS uç noktası tanımlıysa (appsettings.Production.json > Kestrel:Endpoints:Https)
+    // HTTP istekleri HTTPS'e yönlendirilir; yalnızca HTTP ile yayında yönlendirme yapılmaz.
+    var httpsEnabled = !string.IsNullOrWhiteSpace(app.Configuration["Kestrel:Endpoints:Https:Url"])
+                       || app.Environment.IsDevelopment();
+
     if (!app.Environment.IsDevelopment())
     {
         app.UseExceptionHandler("/Error");
-        app.UseHsts();
+        if (httpsEnabled) app.UseHsts();
     }
 
     // 403 -> Erişim Reddedildi, 404 -> Bulunamadı vb.
@@ -98,7 +115,8 @@ try
         }
     });
 
-    app.UseHttpsRedirection();
+    if (httpsEnabled)
+        app.UseHttpsRedirection();
     app.UseStaticFiles();
 
     app.UseRouting();
@@ -116,6 +134,9 @@ try
     app.MapControllerRoute(
         name: "default",
         pattern: "{controller=Home}/{action=Index}/{id?}");
+
+    Log.Information("BoAdmin hazır. Ortam: {Environment}, klasör: {ContentRoot}",
+        app.Environment.EnvironmentName, app.Environment.ContentRootPath);
 
     app.Run();
 }

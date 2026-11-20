@@ -85,6 +85,17 @@ prod'da `D:\Logs\BoAdmin\audit`. IIS app pool kimliğine bu klasörde **Modify**
   yazılır ve yeniden okunarak doğrulanır. "Ekle"de sonuç işlem anındaki güncel keyword'lerden hesaplanır.
 - **İşlem Geçmişi:** ortam bazlı filtre, CSV dışa aktarma
 
+## Sunucuda exe olarak çalıştırma (IIS gerekmez)
+
+1. VS: Build > Publish > **Sunucu** profili > Publish. Çıktı: `src\BoAdmin.Web\bin\publish\` (self-contained, sunucuya .NET kurmak gerekmez).
+2. Klasörün tamamını sunucuya kopyalayın (ör. `D:\Apps\BoAdmin`).
+3. Port: `appsettings.Production.json` > `Kestrel:Endpoints:Http:Url` (varsayılan `http://0.0.0.0:5080`).
+4. Log/audit klasörü: `appsettings.json` > `Serilog...path` ve `Audit:Directory` sunucuda var olan bir sürücüyü göstermeli.
+5. Yönetici PowerShell'de: `.\servis-kur.ps1 -Port 5080`, ardından her ortam için `.\sifre-ayarla.ps1 -Ortam TEST`.
+6. Erişim: `http://SUNUCUADI:5080`. Deneme için servis kurmadan `BoAdmin.exe` çift tıkla da çalışır.
+
+Güncelleme: servisi durdurun (`Stop-Service BoAdmin`), dosyaları üzerine kopyalayın (`appsettings*.json` hariç), başlatın.
+
 ## Kod parçaları (ilerleme)
 
 - [x] Parça 1: Proje dosyaları, `Program.cs`, `appsettings*.json`
