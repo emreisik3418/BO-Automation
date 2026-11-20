@@ -39,13 +39,14 @@ public sealed class ModuleRegistry
     public IReadOnlyList<ModuleDescriptor> All { get; } = new[]
     {
         new ModuleDescriptor(ModuleNames.Reports, "Rapor Yönetişimi",
-            "Rapor arama, silme, toplu yedekleme, ad güncelleme ve işlem geçmişi",
+            "Rapor arama, silme, toplu yedekleme, ad ve keyword güncelleme, işlem geçmişi",
             "reports", "Reports", "Index", IsAvailable: true,
             new[]
             {
                 new ModuleNavItem("Rapor Arama", "Index", "search", "DeletePreview", "Delete"),
                 new ModuleNavItem("Rapor Silme", "Bulk", "layers", "BulkPreview", "BulkExecute"),
                 new ModuleNavItem("Rapor Adı Güncelleme", "Rename", "edit", "RenamePreview", "RenameExecute"),
+                new ModuleNavItem("Keyword Güncelleme", "Keywords", "tag", "KeywordsPreview", "KeywordsExecute"),
                 new ModuleNavItem("İşlem Geçmişi", "History", "clock"),
             }),
 

@@ -44,6 +44,14 @@ public interface IReportService
     /// <summary>Onaylanan ad değişikliklerini uygular. Her rapor ayrı işlenir ve audit'e yazılır.</summary>
     Task<IReadOnlyList<DeleteItemResult>> ExecuteRenameAsync(IReadOnlyList<RenameRequest> requests, int confirmationCount,
         IOperationProgress? progress = null);
+
+    /// <summary>Excel satırlarındaki CUID'leri çözer, mevcut keyword'leri okur ve önizleme döndürür.</summary>
+    Task<KeywordPreviewDto> PrepareKeywordsAsync(IReadOnlyList<KeywordRow> rows, IReadOnlyList<RenameRowIssue> fileIssues,
+        IOperationProgress? progress = null, CancellationToken ct = default);
+
+    /// <summary>Onaylanan keyword değişikliklerini uygular. Her rapor ayrı işlenir ve audit'e yazılır.</summary>
+    Task<IReadOnlyList<DeleteItemResult>> ExecuteKeywordsAsync(IReadOnlyList<KeywordRequest> requests, int confirmationCount,
+        IOperationProgress? progress = null);
 }
 
 public sealed class ReportService : IReportService
@@ -393,6 +401,193 @@ public sealed class ReportService : IReportService
         }
 
         _logger.LogInformation("Toplu ad güncelleme bitti. Batch: {BatchId}, Başarılı: {Ok}, Başarısız: {Fail}",
+            batchId, results.Count(r => r.Success), results.Count(r => !r.Success));
+
+        return results;
+    }
+
+    // ------------------------------------------------------------------
+    // Excel ile toplu keyword güncelleme
+    // ------------------------------------------------------------------
+
+    public const int KeywordPreviewSteps = 3;
+    public const int KeywordExecuteSteps = 2;
+
+    public async Task<KeywordPreviewDto> PrepareKeywordsAsync(IReadOnlyList<KeywordRow> rows, IReadOnlyList<RenameRowIssue> fileIssues,
+        IOperationProgress? progress = null, CancellationToken ct = default)
+    {
+        progress ??= NullOperationProgress.Instance;
+
+        // 1) Satır kontrolü
+        progress.Phase("Excel satırları kontrol ediliyor", rows.Count);
+        var invalid = new List<RenameRowIssue>(fileIssues);
+        var valid = new List<KeywordRow>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var row in rows)
+        {
+            progress.Step();
+
+            var keywords = KeywordList.Parse(row.Keywords);
+            if (keywords.Count == 0 && row.Mode == KeywordMode.Add)
+            {
+                invalid.Add(new RenameRowIssue(row.RowNumber, row.Cuid, "Eklenecek keyword yok. Tüm keyword'leri silmek için İşlem sütununa 'Değiştir' yazın."));
+                continue;
+            }
+
+            if (KeywordList.Format(keywords).Length > KeywordList.MaxLength)
+            {
+                invalid.Add(new RenameRowIssue(row.RowNumber, row.Cuid, $"Keyword metni en fazla {KeywordList.MaxLength} karakter olabilir."));
+                continue;
+            }
+
+            if (!seen.Add(row.Cuid))
+            {
+                invalid.Add(new RenameRowIssue(row.RowNumber, row.Cuid, "Bu CUID dosyada daha önce geçiyor; yalnızca ilk satır işlenir."));
+                continue;
+            }
+
+            valid.Add(row);
+        }
+
+        if (valid.Count == 0)
+            throw new AppValidationException(invalid.Count > 0
+                ? $"Excel'de işlenebilecek satır yok ({invalid.Count} satır hatalı). İlk hata: satır {invalid[0].RowNumber} - {invalid[0].Reason}"
+                : "Excel'de CUID ve keyword içeren satır bulunamadı.");
+
+        if (valid.Count > MaxBulkSize)
+            throw new AppValidationException(
+                $"Tek seferde en fazla {MaxBulkSize} rapor işlenebilir. Dosyada: {valid.Count}. Lütfen dosyayı bölün.");
+
+        // 2) Raporlar
+        progress.Phase("Raporlar BO'da aranıyor", valid.Count);
+        var reports = new List<ReportListItemDto>();
+        foreach (var chunk in valid.Select(r => r.Cuid).Chunk(LookupChunkSize))
+        {
+            reports.AddRange(await _gateway.GetReportsByCuidsAsync(chunk, ct));
+            for (var i = 0; i < chunk.Length; i++) progress.Step();
+        }
+
+        var byCuid = reports.Where(r => r.Cuid is not null)
+            .GroupBy(r => r.Cuid!, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+        var found = new List<(KeywordRow Row, ReportListItemDto Report)>();
+        var notFound = new List<RenameRowIssue>();
+        foreach (var row in valid)
+        {
+            if (byCuid.TryGetValue(row.Cuid, out var report)) found.Add((row, report));
+            else notFound.Add(new RenameRowIssue(row.RowNumber, row.Cuid, "Bu ortamda bulunamadı veya desteklenen bir rapor türü değil."));
+        }
+
+        // 3) Mevcut keyword'ler (rapor başına bir istek)
+        progress.Phase("Mevcut keyword'ler okunuyor", found.Count);
+        var items = new List<KeywordPreviewItemDto>();
+        foreach (var (row, report) in found)
+        {
+            progress.Current(report.Name);
+            var requested = KeywordList.Format(KeywordList.Parse(row.Keywords));
+
+            string current;
+            try
+            {
+                current = await _gateway.GetKeywordsAsync(report.Id, ct);
+            }
+            catch (BoException ex)
+            {
+                items.Add(new KeywordPreviewItemDto(row.RowNumber, report, row.Mode, requested, "?", "?", false,
+                    $"Mevcut keyword'ler okunamadı: {ex.UserMessage}"));
+                progress.Step(report.Name);
+                continue;
+            }
+
+            var result = KeywordList.Apply(current, row.Keywords, row.Mode);
+            var unchanged = string.Equals(KeywordList.Format(KeywordList.Parse(current)), result, StringComparison.Ordinal);
+
+            items.Add(new KeywordPreviewItemDto(row.RowNumber, report, row.Mode, requested,
+                KeywordList.Format(KeywordList.Parse(current)), result,
+                CanProcess: !unchanged,
+                Reason: unchanged ? "Değişiklik yok (keyword'ler zaten aynı)." : null));
+
+            progress.Step(report.Name);
+        }
+
+        return new KeywordPreviewDto(items, notFound, invalid.OrderBy(i => i.RowNumber).ToList());
+    }
+
+    public async Task<IReadOnlyList<DeleteItemResult>> ExecuteKeywordsAsync(IReadOnlyList<KeywordRequest> requests, int confirmationCount,
+        IOperationProgress? progress = null)
+    {
+        progress ??= NullOperationProgress.Instance;
+        var ct = CancellationToken.None; // yarıda kalmasın
+
+        var distinct = requests.Where(r => r.ReportId > 0).GroupBy(r => r.ReportId).Select(g => g.First()).ToList();
+        var ids = ValidateIds(distinct.Select(r => r.ReportId).ToList(), MaxBulkSize);
+        ValidateConfirmation(confirmationCount, ids.Count);
+
+        progress.Phase("Raporlar doğrulanıyor");
+        var reports = (await _gateway.GetReportsByIdsAsync(ids, ct)).ToDictionary(r => r.Id);
+        var batchId = Guid.NewGuid();
+
+        _logger.LogInformation("Toplu keyword güncelleme başladı. Batch: {BatchId}, Ortam: {Environment}, Kullanıcı: {User}, Rapor: {Count}",
+            batchId, _environment.Key, _currentUser.UserName, ids.Count);
+
+        progress.Phase("Keyword'ler güncelleniyor", distinct.Count);
+        var results = new List<DeleteItemResult>(distinct.Count);
+
+        foreach (var request in distinct)
+        {
+            DeleteItemResult result;
+            reports.TryGetValue(request.ReportId, out var report);
+
+            if (report is null)
+            {
+                result = new DeleteItemResult(request.ReportId, $"(ID: {request.ReportId})", null, ReportOperation.Keywords, false,
+                    "Rapor bulunamadı veya desteklenen bir rapor türü değil.");
+            }
+            else
+            {
+                progress.Current(report.Name);
+                try
+                {
+                    // Sonuç, önizlemeden bu yana yapılmış değişiklikleri kaybetmemek için güncel değerden hesaplanır
+                    var current = await _gateway.GetKeywordsAsync(report.Id, ct);
+                    var newValue = KeywordList.Apply(current, request.Keywords, request.Mode);
+                    var currentFormatted = KeywordList.Format(KeywordList.Parse(current));
+
+                    if (string.Equals(currentFormatted, newValue, StringComparison.Ordinal))
+                    {
+                        result = new DeleteItemResult(report.Id, report.Name, report.FolderPath, ReportOperation.Keywords, true,
+                            $"Değişiklik gerekmedi; keyword'ler zaten: '{currentFormatted}'");
+                    }
+                    else
+                    {
+                        await _gateway.SetKeywordsAsync(report.Id, newValue, ct);
+                        var modeText = request.Mode == KeywordMode.Replace ? "değiştirildi" : "eklendi";
+                        result = new DeleteItemResult(report.Id, report.Name, report.FolderPath, ReportOperation.Keywords, true,
+                            $"Keyword'ler {modeText}: '{currentFormatted}' → '{newValue}'");
+                    }
+                }
+                catch (Exception ex) when (ex is BoException or AppValidationException)
+                {
+                    _logger.LogWarning(ex, "Keyword güncellenemedi. Rapor: {ReportId} {ReportName}", report.Id, report.Name);
+                    result = new DeleteItemResult(report.Id, report.Name, report.FolderPath, ReportOperation.Keywords, false,
+                        $"Keyword'ler güncellenemedi: {UserMessageOf(ex)}");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Keyword güncellemede beklenmeyen hata. Rapor: {ReportId}", report.Id);
+                    result = new DeleteItemResult(report.Id, report.Name, report.FolderPath, ReportOperation.Keywords, false,
+                        $"Beklenmeyen hata: {ex.Message}");
+                }
+            }
+
+            results.Add(result);
+            await WriteAuditAsync(result, report, null, batchId);
+            progress.Step(result.ReportName, result.Success);
+        }
+
+        _logger.LogInformation("Toplu keyword güncelleme bitti. Batch: {BatchId}, Başarılı: {Ok}, Başarısız: {Fail}",
             batchId, results.Count(r => r.Success), results.Count(r => !r.Success));
 
         return results;

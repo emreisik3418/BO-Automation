@@ -188,6 +188,37 @@ public sealed class RenameExecuteModel
     public int ConfirmationCount { get; set; }
 }
 
+// ----------------------------------------------------------------------
+// Excel ile toplu keyword güncelleme
+// ----------------------------------------------------------------------
+
+public sealed class KeywordUploadViewModel
+{
+    public string? ErrorMessage { get; set; }
+    public int MaxCount => ReportService.MaxBulkSize;
+}
+
+public sealed class KeywordPreviewViewModel
+{
+    public KeywordPreviewViewModel(KeywordPreviewDto preview) => Preview = preview;
+
+    public KeywordPreviewDto Preview { get; }
+    public string? FileName { get; set; }
+    public string? EnvironmentKey { get; set; }
+
+    /// <summary>Önizlemeyi hazırlayan iş; onayda değişiklikler buradan alınır.</summary>
+    public Guid PreviewJobId { get; set; }
+
+    public static string ModeText(KeywordMode mode) => mode == KeywordMode.Replace ? "Değiştir" : "Ekle";
+}
+
+public sealed class KeywordExecuteModel
+{
+    public string Environment { get; set; } = string.Empty;
+    public Guid PreviewJobId { get; set; }
+    public int ConfirmationCount { get; set; }
+}
+
 /// <summary>Arka plan işinin ilerleme ekranı.</summary>
 public sealed record JobViewModel(
     Guid Id,
@@ -251,6 +282,7 @@ public static class OperationNames
         (nameof(ReportOperation.Archive), "Arşive taşıma"),
         (nameof(ReportOperation.BackupCopy), "Rapor silme (yedekle + sil)"),
         (nameof(ReportOperation.Rename), "Ad güncelleme"),
+        (nameof(ReportOperation.Keywords), "Keyword güncelleme"),
     };
 
     public static string Get(string? operation) => operation switch
@@ -260,6 +292,7 @@ public static class OperationNames
         nameof(ReportOperation.DeleteInstance) => "Instance silme",
         nameof(ReportOperation.BackupCopy) => "Rapor silme (yedekle + sil)",
         nameof(ReportOperation.Rename) => "Ad güncelleme",
+        nameof(ReportOperation.Keywords) => "Keyword güncelleme",
         "BackupMove" => "Toplu yedekleme (TXT, taşıma)", // eski kayıtlar
         _ => operation ?? string.Empty
     };

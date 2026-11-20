@@ -90,7 +90,10 @@ public enum ReportOperation
     BackupCopy,
 
     /// <summary>Excel ile toplu ad güncelleme</summary>
-    Rename
+    Rename,
+
+    /// <summary>Excel ile toplu keyword güncelleme</summary>
+    Keywords
 }
 
 /// <summary>Toplu yedekleme önizlemesindeki bir rapor.</summary>
@@ -155,3 +158,42 @@ public sealed record RenamePreviewDto(
 
 /// <summary>Onaylanan tek bir ad değişikliği.</summary>
 public sealed record RenameRequest(int ReportId, string NewName);
+
+// ----------------------------------------------------------------------
+// Excel ile toplu keyword güncelleme
+// ----------------------------------------------------------------------
+
+public enum KeywordMode
+{
+    /// <summary>Mevcut keyword'lere ekle</summary>
+    Add,
+
+    /// <summary>Mevcut keyword'leri tamamen değiştir</summary>
+    Replace
+}
+
+/// <summary>Excel'deki bir satır: CUID + keyword'ler + işlem.</summary>
+public sealed record KeywordRow(int RowNumber, string Cuid, string Keywords, KeywordMode Mode);
+
+/// <summary>Keyword güncelleme önizlemesindeki bir rapor.</summary>
+public sealed record KeywordPreviewItemDto(
+    int RowNumber,
+    ReportListItemDto Report,
+    KeywordMode Mode,
+    string Requested,
+    string Current,
+    string Result,
+    bool CanProcess,
+    string? Reason = null);
+
+public sealed record KeywordPreviewDto(
+    IReadOnlyList<KeywordPreviewItemDto> Items,
+    IReadOnlyList<RenameRowIssue> NotFound,
+    IReadOnlyList<RenameRowIssue> InvalidRows)
+{
+    public IReadOnlyList<KeywordPreviewItemDto> Processable => Items.Where(i => i.CanProcess).ToList();
+    public IReadOnlyList<KeywordPreviewItemDto> Skipped => Items.Where(i => !i.CanProcess).ToList();
+}
+
+/// <summary>Onaylanan tek bir keyword değişikliği (sonuç, işlem anındaki güncel değerden yeniden hesaplanır).</summary>
+public sealed record KeywordRequest(int ReportId, string Keywords, KeywordMode Mode);

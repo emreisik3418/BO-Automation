@@ -27,6 +27,10 @@ namespace BoAdmin.Web.Modules.Reports;
 ///  GET  /Reports/RenameTemplate -> boş Excel şablonu
 ///  POST /Reports/RenamePreview  -> Excel önizleme (arka plan işi)
 ///  POST /Reports/RenameExecute  -> ad güncelleme (arka plan işi)
+///  GET  /Reports/Keywords       -> Excel ile toplu keyword güncelleme: dosya yükleme
+///  GET  /Reports/KeywordsTemplate -> boş Excel şablonu
+///  POST /Reports/KeywordsPreview  -> Excel önizleme (arka plan işi)
+///  POST /Reports/KeywordsExecute  -> keyword güncelleme (arka plan işi)
 ///  GET  /Reports/Job/{id}       -> ilerleme ekranı
 ///  GET  /Reports/JobStatus/{id} -> ilerleme durumu (JSON, saniyede bir sorulur)
 ///  GET  /Reports/JobResult/{id} -> iş bitince sonuç (önizleme veya sonuç sayfası)
@@ -370,6 +374,112 @@ public sealed class ReportsController : Controller
     }
 
     // ------------------------------------------------------------------
+    // Excel ile toplu keyword güncelleme
+    // ------------------------------------------------------------------
+
+    [HttpGet]
+    public IActionResult Keywords() => View(new KeywordUploadViewModel());
+
+    [HttpGet]
+    public IActionResult KeywordsTemplate() =>
+        File(KeywordFileReader.CreateTemplate(),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "rapor-keyword-guncelleme-sablonu.xlsx");
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    [RequestSizeLimit(MaxExcelBytes + 64 * 1024)]
+    public async Task<IActionResult> KeywordsPreview(IFormFile? file, CancellationToken ct)
+    {
+        var form = new KeywordUploadViewModel();
+
+        if (file is null || file.Length == 0)
+        {
+            form.ErrorMessage = "Lütfen CUID ve keyword'leri içeren bir Excel dosyası (.xlsx) seçin.";
+            return View("Keywords", form);
+        }
+
+        var ext = Path.GetExtension(file.FileName);
+        if (!string.Equals(ext, ".xlsx", StringComparison.OrdinalIgnoreCase) && !string.Equals(ext, ".xlsm", StringComparison.OrdinalIgnoreCase))
+        {
+            form.ErrorMessage = "Yalnızca .xlsx dosyası yüklenebilir. Eski .xls dosyasını Excel'de 'Farklı Kaydet > .xlsx' ile dönüştürün.";
+            return View("Keywords", form);
+        }
+
+        if (file.Length > MaxExcelBytes)
+        {
+            form.ErrorMessage = "Dosya en fazla 5 MB olabilir.";
+            return View("Keywords", form);
+        }
+
+        KeywordFileReader.ReadResult read;
+        try
+        {
+            await using var ms = new MemoryStream();
+            await file.CopyToAsync(ms, ct);
+            ms.Position = 0;
+            read = KeywordFileReader.Read(ms);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            form.ErrorMessage = "Excel dosyası okunamadı. Dosyanın bozuk veya parola korumalı olmadığından emin olun.";
+            return View("Keywords", form);
+        }
+
+        var fileName = Path.GetFileName(file.FileName);
+        var env = _environmentAccessor.Current;
+
+        var job = _jobs.Start("Keyword önizlemesi hazırlanıyor", nameof(Keywords), _currentUser.UserName, _currentUser.DisplayName,
+            env, ReportService.KeywordPreviewSteps,
+            async (sp, progress, jobCt) =>
+            {
+                var service = sp.GetRequiredService<IReportService>();
+                var preview = await service.PrepareKeywordsAsync(read.Rows, read.Issues, progress, jobCt);
+                return new KeywordPreviewViewModel(preview) { FileName = fileName, EnvironmentKey = env.Key };
+            });
+
+        return RedirectToAction(nameof(Job), new { id = job.Id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public IActionResult KeywordsExecute(KeywordExecuteModel model)
+    {
+        if (!EnvironmentMatches(model.Environment, out var redirect, nameof(Keywords)))
+            return redirect;
+
+        // Değişiklikler formdan değil, sunucudaki önizlemeden alınır
+        var previewJob = _jobs.Get(model.PreviewJobId, _currentUser.UserName);
+        if (previewJob?.Result is not KeywordPreviewViewModel preview)
+        {
+            TempData["Warning"] = "Önizleme bulunamadı veya süresi doldu. Lütfen Excel dosyasını yeniden yükleyin.";
+            return RedirectToAction(nameof(Keywords));
+        }
+
+        var requests = preview.Preview.Processable
+            .Select(i => new KeywordRequest(i.Report.Id, i.Requested, i.Mode))
+            .ToList();
+
+        if (requests.Count == 0 || model.ConfirmationCount != requests.Count)
+        {
+            TempData["Warning"] = $"Onay sayısı ({model.ConfirmationCount}) güncellenecek rapor sayısıyla ({requests.Count}) eşleşmiyor.";
+            return RedirectToAction(nameof(JobResult), new { id = model.PreviewJobId });
+        }
+
+        var confirmation = model.ConfirmationCount;
+        var job = _jobs.Start($"{requests.Count} raporun keyword'leri güncelleniyor", nameof(Keywords), _currentUser.UserName, _currentUser.DisplayName,
+            _environmentAccessor.Current, ReportService.KeywordExecuteSteps,
+            async (sp, progress, _) =>
+            {
+                var service = sp.GetRequiredService<IReportService>();
+                var results = await service.ExecuteKeywordsAsync(requests, confirmation, progress);
+                return new DeleteResultViewModel(results, ReportOperation.Keywords);
+            });
+
+        return RedirectToAction(nameof(Job), new { id = job.Id });
+    }
+
+    // ------------------------------------------------------------------
     // Arka plan işleri: ilerleme ekranı
     // ------------------------------------------------------------------
 
@@ -443,6 +553,9 @@ public sealed class ReportsController : Controller
             case RenamePreviewViewModel renamePreview:
                 renamePreview.PreviewJobId = job.Id;
                 return View("RenamePreview", renamePreview);
+            case KeywordPreviewViewModel keywordPreview:
+                keywordPreview.PreviewJobId = job.Id;
+                return View("KeywordsPreview", keywordPreview);
             case DeleteResultViewModel result:
                 return View("DeleteResult", result);
             default:

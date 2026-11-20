@@ -1,0 +1,78 @@
+@using BoAdmin.Web.Infrastructure
+@model KeywordUploadViewModel
+@{
+    ViewData["Title"] = "Keyword Güncelleme";
+    ViewData["Subtitle"] = "Excel'deki CUID listesiyle raporlara keyword ekleyin veya keyword'leri değiştirin.";
+}
+
+<div class="row g-4">
+    <div class="col-xxl-7 col-xl-8">
+        @if (Model.ErrorMessage is not null)
+        {
+            <div class="alert alert-danger">@Model.ErrorMessage</div>
+        }
+
+        <form method="post" asp-action="KeywordsPreview" enctype="multipart/form-data" class="card" data-busy-form>
+            <div class="card-body">
+                <label for="file" class="form-label">Excel dosyası (.xlsx)</label>
+                <input type="file" class="form-control" id="file" name="file"
+                       accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required />
+                <div class="form-text mb-3">
+                    İlk sayfa okunur: <strong>CUID</strong>, <strong>Keyword</strong> ve isteğe bağlı <strong>İşlem</strong> sütunu.
+                    En fazla @Model.MaxCount rapor, 5 MB.
+                </div>
+
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="submit" class="btn btn-primary" data-busy-text="Dosya yükleniyor...">@Icons.Get("upload", 16) Önizle</button>
+                    <a asp-action="KeywordsTemplate" class="btn btn-outline-success">@Icons.Get("download", 16) Boş şablonu indir</a>
+                </div>
+            </div>
+        </form>
+
+        <div class="row g-3 mt-1">
+            <div class="col-md-6">
+                <div class="summary-tile">
+                    <div class="option-title mb-1"><span class="kind-pill kind-Excel me-1">Ekle</span> varsayılan</div>
+                    <div class="option-text">Keyword'ler raporun mevcut keyword'lerine eklenir; mevcutlar korunur.
+                        İşlem sütunu boşsa bu uygulanır.</div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="summary-tile">
+                    <div class="option-title mb-1"><span class="kind-pill kind-Pdf me-1">Değiştir</span></div>
+                    <div class="option-text">Raporun keyword'leri tamamen Excel'dekilerle değiştirilir.
+                        Keyword sütunu boşsa raporun tüm keyword'leri silinir.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-5 col-xl-4">
+        <div class="card">
+            <div class="card-header">Excel biçimi</div>
+            <div class="card-body">
+                <div class="table-wrap border rounded mb-3">
+                    <table class="table table-modern mb-0">
+                        <thead>
+                            <tr><th>CUID</th><th>Keyword</th><th>İşlem</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td class="mono">AW40QpsIInZGuxU7JobhPk0</td><td>Finans, Aylık</td><td>Ekle</td></tr>
+                            <tr><td class="mono">AQ8aoL8XYyRC1X19n5gM9L8</td><td>Yatırım, Hisse</td><td>Değiştir</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <ul class="small text-muted mb-0 ps-3">
+                    <li>Birden fazla keyword virgülle ayrılır.</li>
+                    <li>Aynı keyword bir kez tutulur (büyük/küçük harf farkı gözetilmez).</li>
+                    <li>Sütunlar başlıklarından bulunur. Başlık yoksa A = CUID, B = keyword, C = işlem.</li>
+                    <li>Önizlemede mevcut ve yeni keyword'leri görüp onaylamadan hiçbir rapor değiştirilmez.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/reports.js" asp-append-version="true"></script>
+}

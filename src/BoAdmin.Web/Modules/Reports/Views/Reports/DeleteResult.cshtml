@@ -5,6 +5,7 @@
     ViewData["Title"] = Model.OperationText + " sonucu";
     var isBulk = Model.Operation == ReportOperation.BackupCopy;
     var isRename = Model.Operation == ReportOperation.Rename;
+    var isKeywords = Model.Operation == ReportOperation.Keywords;
 }
 
 <div class="row g-3 mb-3">
@@ -68,6 +69,10 @@
     else if (isRename)
     {
         <a asp-action="Rename" class="btn btn-primary">Yeni ad güncelleme</a>
+    }
+    else if (isKeywords)
+    {
+        <a asp-action="Keywords" class="btn btn-primary">Yeni keyword güncelleme</a>
     }
     else
     {

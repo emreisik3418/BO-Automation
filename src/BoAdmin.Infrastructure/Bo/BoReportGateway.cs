@@ -415,6 +415,101 @@ public sealed class BoReportGateway : IBoReportGateway
     }
 
     // ------------------------------------------------------------------
+    // Keyword güncelleme (Excel ile toplu)
+    //   GET /v1/documents/{id}  -> "keywords" alanı okunur
+    //   PUT /v1/documents/{id}  -> GET yanıtı, "keywords" alanı değiştirilmiş hâliyle
+    // ------------------------------------------------------------------
+
+    private static readonly string[] KeywordFieldNames = { "keywords", "keyword", "SI_KEYWORD" };
+
+    public async Task<string> GetKeywordsAsync(int id, CancellationToken ct = default)
+    {
+        var json = await _client.GetJsonAsync($"v1/documents/{id}", ct);
+        var node = System.Text.Json.Nodes.JsonNode.Parse(json.GetRawText()) as System.Text.Json.Nodes.JsonObject
+                   ?? throw new BoOperationException("Rapor bilgisi okunamadı (/v1/documents).");
+
+        var (owner, key) = FindField(node, KeywordFieldNames);
+        if (owner is null || key is null)
+        {
+            // Hiç keyword'ü olmayan raporlarda alan gelmeyebilir
+            _logger.LogDebug("Raporda keyword alanı yok, boş kabul edildi: {Id}", id);
+            return string.Empty;
+        }
+
+        return ReadKeywordValue(owner[key]);
+    }
+
+    public async Task SetKeywordsAsync(int id, string keywords, CancellationToken ct = default)
+    {
+        var path = $"v1/documents/{id}";
+        var json = await _client.GetJsonAsync(path, ct);
+        var root = System.Text.Json.Nodes.JsonNode.Parse(json.GetRawText()) as System.Text.Json.Nodes.JsonObject
+                   ?? throw new BoOperationException("Rapor bilgisi okunamadı (/v1/documents).");
+
+        // GET yanıtı olduğu gibi geri gönderilir (Bruno'da doğrulanan yöntem); yalnızca keyword alanı değişir
+        var (owner, key) = FindField(root, KeywordFieldNames);
+        if (owner is null || key is null)
+        {
+            // Alan yoksa kökte "keywords" olarak eklenir
+            owner = root;
+            key = "keywords";
+        }
+
+        // BO alanı dizi olarak döndürdüyse dizi, metin olarak döndürdüyse metin yazılır
+        if (owner[key] is System.Text.Json.Nodes.JsonArray)
+        {
+            var array = new System.Text.Json.Nodes.JsonArray();
+            foreach (var k in KeywordList.Parse(keywords)) array.Add(k);
+            owner[key] = array;
+        }
+        else
+        {
+            owner[key] = keywords;
+        }
+
+        await _client.PutJsonAsync(path, root, ct);
+
+        // Doğrulama
+        var after = await GetKeywordsAsync(id, ct);
+        if (!KeywordList.SameSet(after, keywords))
+        {
+            _logger.LogWarning("Keyword güncelleme isteği kabul edildi ama değer değişmedi. Rapor {Id}. Beklenen: '{Expected}', BO: '{Actual}'",
+                id, keywords, after);
+            throw new BoOperationException($"Keyword güncelleme isteği kabul edildi ama BO'daki değer değişmedi (BO: '{after}').");
+        }
+
+        _logger.LogInformation("Rapor keyword'leri güncellendi: {Id} -> '{Keywords}'", id, keywords);
+    }
+
+    /// <summary>Alanı kökte veya tek seviye iç nesnede arar (büyük/küçük harf duyarsız).</summary>
+    private static (System.Text.Json.Nodes.JsonObject? Owner, string? Key) FindField(
+        System.Text.Json.Nodes.JsonObject root, IReadOnlyList<string> names)
+    {
+        string? Match(System.Text.Json.Nodes.JsonObject o) =>
+            o.Select(p => p.Key).FirstOrDefault(k => names.Any(n => string.Equals(n, k, StringComparison.OrdinalIgnoreCase)));
+
+        var key = Match(root);
+        if (key is not null) return (root, key);
+
+        foreach (var (_, value) in root)
+        {
+            if (value is System.Text.Json.Nodes.JsonObject inner && Match(inner) is { } innerKey)
+                return (inner, innerKey);
+        }
+
+        return (null, null);
+    }
+
+    private static string ReadKeywordValue(System.Text.Json.Nodes.JsonNode? node) => node switch
+    {
+        null => string.Empty,
+        System.Text.Json.Nodes.JsonArray array => KeywordList.Format(array.Select(x => x?.ToString() ?? string.Empty)
+            .Where(x => x.Length > 0)),
+        System.Text.Json.Nodes.JsonValue value when value.TryGetValue<string>(out var text) => text,
+        _ => node.ToString()
+    };
+
+    // ------------------------------------------------------------------
     // Kopyalama (TXT ile toplu yedekleme)
     // ------------------------------------------------------------------
 

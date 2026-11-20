@@ -47,6 +47,12 @@ public interface IBoReportGateway
     /// </summary>
     Task<CopyResult> CopyToFolderAsync(int sourceId, string sourceCuid, string kind, int targetFolderId, string newName, CancellationToken ct = default);
 
+    /// <summary>Raporun mevcut keyword metni (GET /v1/documents/{id}).</summary>
+    Task<string> GetKeywordsAsync(int id, CancellationToken ct = default);
+
+    /// <summary>Raporun keyword'lerini yazar ve yazıldığını doğrular (GET + PUT /v1/documents/{id}).</summary>
+    Task SetKeywordsAsync(int id, string keywords, CancellationToken ct = default);
+
     /// <summary>Raporun adını değiştirir ve yeni adın yazıldığını doğrular.</summary>
     Task RenameAsync(int id, string newName, CancellationToken ct = default);
 

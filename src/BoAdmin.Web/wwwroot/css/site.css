@@ -904,3 +904,20 @@ a.sort-link:hover { color: var(--app-brand); }
 .confirm-text { color: var(--app-muted); margin-bottom: 1.4rem; }
 .confirm-actions { display: flex; justify-content: center; gap: .6rem; }
 .confirm-actions .btn { min-width: 9rem; }
+
+/* Keyword önizlemesi */
+.kw-list { display: flex; flex-wrap: wrap; gap: .3rem; max-width: 26rem; }
+.kw-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: .15rem .55rem;
+    border-radius: 999px;
+    font-size: .78rem;
+    font-weight: 600;
+    color: #334155;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+}
+.kw-added { color: #047857; background: #ecfdf5; border-color: #a7f3d0; }
+.kw-added::before { content: "+"; margin-right: .25rem; }
+.kw-removed { color: #b91c1c; background: #fef2f2; border-color: #fecaca; text-decoration: line-through; }

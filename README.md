@@ -80,6 +80,9 @@ prod'da `D:\Logs\BoAdmin\audit`. IIS app pool kimliğine bu klasörde **Modify**
 - **Rapor Adı Güncelleme (Excel):** CUID + yeni ad içeren .xlsx yüklenir (şablon indirilebilir), önizlemede eski/yeni
   adlar görülür ve sayı yazılarak onaylanır. Ad, `GET + PUT /v1/documents/{id}` (olmazsa `/v1/infoobjects/{id}`) ile
   güncellenir ve CMS sorgusuyla doğrulanır. CUID, klasör, instance ve zamanlamalar değişmez. En fazla 500 rapor.
+- **Keyword Güncelleme (Excel):** CUID + keyword + İşlem (Ekle / Değiştir) içeren .xlsx yüklenir (şablon indirilebilir).
+  Önizlemede mevcut ve yeni keyword'ler (eklenen/kaldırılan) görülür. Keyword'ler `GET + PUT /v1/documents/{id}` ile
+  yazılır ve yeniden okunarak doğrulanır. "Ekle"de sonuç işlem anındaki güncel keyword'lerden hesaplanır.
 - **İşlem Geçmişi:** ortam bazlı filtre, CSV dışa aktarma
 
 ## Kod parçaları (ilerleme)
