@@ -75,8 +75,8 @@ public sealed class CurrentEnvironmentAccessor : ICurrentEnvironment
         EnvironmentInfo? Pick(string? key) =>
             accessible.FirstOrDefault(e => string.Equals(e.Key, key, StringComparison.OrdinalIgnoreCase));
 
+        // Seçim yoksa kullanıcıya tanımlı ilk ortam (Order sırasına göre)
         return Pick(http.Request.Cookies[CookieName])
-               ?? Pick(_catalog.DefaultKey)
                ?? accessible[0];
     }
 }

@@ -58,7 +58,7 @@
             <h2 class="auth-title">@(Model.HasAccess ? "Hoş geldiniz" : "Erişim yetkiniz yok")</h2>
             <p class="auth-subtitle">
                 @(Model.HasAccess
-                    ? "Windows hesabınızla otomatik olarak tanındınız. Çalışmak istediğiniz ortamı seçin."
+                    ? "Windows hesabınızla otomatik olarak tanındınız."
                     : "Windows hesabınızla tanındınız ancak bu uygulamada hiçbir ortam için yetkiniz bulunmuyor.")
             </p>
 
@@ -79,32 +79,8 @@
             {
                 <form method="post" asp-action="Login" class="mt-4">
                     <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
-
-                    <fieldset>
-                        <legend class="field-label">Ortam</legend>
-                        <div class="env-list">
-                            @foreach (var env in Model.Environments)
-                            {
-                                var id = "env-" + env.Key;
-                                <div class="env-option">
-                                    <input type="radio" name="environment" id="@id" value="@env.Key" checked="@env.IsSelected" required />
-                                    <label for="@id">
-                                        <span class="env-dot bg-@env.Color" aria-hidden="true"></span>
-                                        <span class="env-text">
-                                            <span class="env-name">@env.DisplayName <span class="env-key">@env.Key</span></span>
-                                            <span class="env-modules">
-                                                @(env.Modules.Count > 0 ? string.Join(" · ", env.Modules) : "Henüz aktif modül yok")
-                                            </span>
-                                        </span>
-                                        <span class="env-check" aria-hidden="true"></span>
-                                    </label>
-                                </div>
-                            }
-                        </div>
-                    </fieldset>
-
-                    <button type="submit" class="btn-auth mt-4">
-                        Uygulamaya gir
+                    <button type="submit" class="btn-auth">
+                        Giriş yap
                         <span aria-hidden="true">&rarr;</span>
                     </button>
                 </form>

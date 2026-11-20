@@ -10,7 +10,8 @@ namespace BoAdmin.Web.Controllers;
 
 /// <summary>
 /// Giriş ekranı. Kullanıcı Windows hesabıyla otomatik tanınır (şifre sorulmaz);
-/// ekranda kimliğini görür, yetkili olduğu ortamı seçer ve uygulamaya girer.
+/// ekranda kimliğini görür ve uygulamaya girer. Giriş sonrası yetkili olduğu ilk ortam
+/// (appsettings'teki Order sırasına göre) seçili gelir; ortam üst menüden değiştirilir.
 /// </summary>
 [Authorize]
 public sealed class AccountController : Controller
@@ -38,14 +39,14 @@ public sealed class AccountController : Controller
     [HttpGet]
     public IActionResult Login(string? returnUrl)
     {
-        var current = _environment.Current.Key;
+        var first = _accessService.GetAccessibleEnvironments(User).FirstOrDefault()?.Key;
 
         var environments = _accessService.GetAccessibleEnvironments(User)
             .Select(e => new LoginEnvironmentOption(
                 e.Key,
                 e.DisplayName,
                 e.Color,
-                IsSelected: string.Equals(e.Key, current, StringComparison.OrdinalIgnoreCase),
+                IsSelected: string.Equals(e.Key, first, StringComparison.OrdinalIgnoreCase),
                 Modules: _accessService.GetAccessibleModules(User, e.Key)
                     .Select(m => _registry.Find(m))
                     .Where(m => m is { IsAvailable: true })
@@ -68,14 +69,14 @@ public sealed class AccountController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public IActionResult Login(string environment, string? returnUrl)
+    public IActionResult Login(string? returnUrl)
     {
-        var env = _accessService.GetAccessibleEnvironments(User)
-            .FirstOrDefault(e => string.Equals(e.Key, environment, StringComparison.OrdinalIgnoreCase));
+        // Kullanıcıya tanımlı ilk ortam (Order sırasına göre)
+        var env = _accessService.GetAccessibleEnvironments(User).FirstOrDefault();
 
         if (env is null)
         {
-            TempData["LoginError"] = "Seçilen ortama erişim yetkiniz yok.";
+            TempData["LoginError"] = "Bu uygulamada hiçbir ortam için yetkiniz yok.";
             return RedirectToAction(nameof(Login), new { returnUrl });
         }
 
