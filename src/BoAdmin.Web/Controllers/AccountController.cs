@@ -69,7 +69,8 @@ public sealed class AccountController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public IActionResult Login(string? returnUrl)
+    [ActionName(nameof(Login))]
+    public IActionResult LoginPost(string? returnUrl)
     {
         // Kullanıcıya tanımlı ilk ortam (Order sırasına göre)
         var env = _accessService.GetAccessibleEnvironments(User).FirstOrDefault();
