@@ -921,3 +921,20 @@ a.sort-link:hover { color: var(--app-brand); }
 .kw-added { color: #047857; background: #ecfdf5; border-color: #a7f3d0; }
 .kw-added::before { content: "+"; margin-right: .25rem; }
 .kw-removed { color: #b91c1c; background: #fef2f2; border-color: #fecaca; text-decoration: line-through; }
+
+/* Açıklama önizlemesi */
+.desc-text {
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-width: 28rem;
+    max-height: 9rem;
+    overflow: auto;
+    font-size: .85rem;
+    line-height: 1.45;
+    padding: .4rem .6rem;
+    border-radius: .5rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+}
+.desc-old { color: #64748b; }
+.desc-new { color: #065f46; background: #ecfdf5; border-color: #a7f3d0; }

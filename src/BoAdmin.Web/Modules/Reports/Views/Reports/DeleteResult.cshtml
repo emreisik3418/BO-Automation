@@ -6,6 +6,7 @@
     var isBulk = Model.Operation == ReportOperation.BackupCopy;
     var isRename = Model.Operation == ReportOperation.Rename;
     var isKeywords = Model.Operation == ReportOperation.Keywords;
+    var isDescription = Model.Operation == ReportOperation.Description;
 }
 
 <div class="row g-3 mb-3">
@@ -73,6 +74,10 @@
     else if (isKeywords)
     {
         <a asp-action="Keywords" class="btn btn-primary">Yeni keyword güncelleme</a>
+    }
+    else if (isDescription)
+    {
+        <a asp-action="Descriptions" class="btn btn-primary">Yeni açıklama güncelleme</a>
     }
     else
     {

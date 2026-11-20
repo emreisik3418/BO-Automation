@@ -219,6 +219,35 @@ public sealed class KeywordExecuteModel
     public int ConfirmationCount { get; set; }
 }
 
+// ----------------------------------------------------------------------
+// Excel ile toplu açıklama (description) güncelleme
+// ----------------------------------------------------------------------
+
+public sealed class DescriptionUploadViewModel
+{
+    public string? ErrorMessage { get; set; }
+    public int MaxCount => ReportService.MaxBulkSize;
+}
+
+public sealed class DescriptionPreviewViewModel
+{
+    public DescriptionPreviewViewModel(DescriptionPreviewDto preview) => Preview = preview;
+
+    public DescriptionPreviewDto Preview { get; }
+    public string? FileName { get; set; }
+    public string? EnvironmentKey { get; set; }
+
+    /// <summary>Önizlemeyi hazırlayan iş; onayda değişiklikler buradan alınır.</summary>
+    public Guid PreviewJobId { get; set; }
+}
+
+public sealed class DescriptionExecuteModel
+{
+    public string Environment { get; set; } = string.Empty;
+    public Guid PreviewJobId { get; set; }
+    public int ConfirmationCount { get; set; }
+}
+
 /// <summary>Arka plan işinin ilerleme ekranı.</summary>
 public sealed record JobViewModel(
     Guid Id,
@@ -283,6 +312,7 @@ public static class OperationNames
         (nameof(ReportOperation.BackupCopy), "Rapor silme (yedekle + sil)"),
         (nameof(ReportOperation.Rename), "Ad güncelleme"),
         (nameof(ReportOperation.Keywords), "Keyword güncelleme"),
+        (nameof(ReportOperation.Description), "Açıklama güncelleme"),
     };
 
     public static string Get(string? operation) => operation switch
@@ -293,6 +323,7 @@ public static class OperationNames
         nameof(ReportOperation.BackupCopy) => "Rapor silme (yedekle + sil)",
         nameof(ReportOperation.Rename) => "Ad güncelleme",
         nameof(ReportOperation.Keywords) => "Keyword güncelleme",
+        nameof(ReportOperation.Description) => "Açıklama güncelleme",
         "BackupMove" => "Toplu yedekleme (TXT, taşıma)", // eski kayıtlar
         _ => operation ?? string.Empty
     };

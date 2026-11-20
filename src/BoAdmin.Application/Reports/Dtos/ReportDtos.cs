@@ -93,7 +93,10 @@ public enum ReportOperation
     Rename,
 
     /// <summary>Excel ile toplu keyword güncelleme</summary>
-    Keywords
+    Keywords,
+
+    /// <summary>Excel ile toplu açıklama (description) güncelleme</summary>
+    Description
 }
 
 /// <summary>Toplu yedekleme önizlemesindeki bir rapor.</summary>
@@ -197,3 +200,31 @@ public sealed record KeywordPreviewDto(
 
 /// <summary>Onaylanan tek bir keyword değişikliği (sonuç, işlem anındaki güncel değerden yeniden hesaplanır).</summary>
 public sealed record KeywordRequest(int ReportId, string Keywords, KeywordMode Mode);
+
+// ----------------------------------------------------------------------
+// Excel ile toplu açıklama (description) güncelleme
+// ----------------------------------------------------------------------
+
+/// <summary>Excel'deki bir satır: CUID + yeni açıklama.</summary>
+public sealed record DescriptionRow(int RowNumber, string Cuid, string Description);
+
+/// <summary>Açıklama güncelleme önizlemesindeki bir rapor.</summary>
+public sealed record DescriptionPreviewItemDto(
+    int RowNumber,
+    ReportListItemDto Report,
+    string Current,
+    string NewValue,
+    bool CanProcess,
+    string? Reason = null);
+
+public sealed record DescriptionPreviewDto(
+    IReadOnlyList<DescriptionPreviewItemDto> Items,
+    IReadOnlyList<RenameRowIssue> NotFound,
+    IReadOnlyList<RenameRowIssue> InvalidRows)
+{
+    public IReadOnlyList<DescriptionPreviewItemDto> Processable => Items.Where(i => i.CanProcess).ToList();
+    public IReadOnlyList<DescriptionPreviewItemDto> Skipped => Items.Where(i => !i.CanProcess).ToList();
+}
+
+/// <summary>Onaylanan tek bir açıklama değişikliği.</summary>
+public sealed record DescriptionRequest(int ReportId, string Description);

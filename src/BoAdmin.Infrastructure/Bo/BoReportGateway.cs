@@ -481,6 +481,65 @@ public sealed class BoReportGateway : IBoReportGateway
         _logger.LogInformation("Rapor keyword'leri güncellendi: {Id} -> '{Keywords}'", id, keywords);
     }
 
+    // ------------------------------------------------------------------
+    // Açıklama (description): keyword ile aynı yöntem
+    //   GET /v1/documents/{id}  -> "description" alanı okunur
+    //   PUT /v1/documents/{id}  -> GET yanıtı, "description" alanı değiştirilmiş hâliyle
+    // ------------------------------------------------------------------
+
+    private static readonly string[] DescriptionFieldNames = { "description", "SI_DESCRIPTION" };
+
+    public async Task<string> GetDescriptionAsync(int id, CancellationToken ct = default)
+    {
+        var json = await _client.GetJsonAsync($"v1/documents/{id}", ct);
+        var node = System.Text.Json.Nodes.JsonNode.Parse(json.GetRawText()) as System.Text.Json.Nodes.JsonObject
+                   ?? throw new BoOperationException("Rapor bilgisi okunamadı (/v1/documents).");
+
+        var (owner, key) = FindField(node, DescriptionFieldNames);
+        if (owner is null || key is null)
+        {
+            // Açıklaması olmayan raporlarda alan gelmeyebilir
+            _logger.LogDebug("Raporda description alanı yok, boş kabul edildi: {Id}", id);
+            return string.Empty;
+        }
+
+        return owner[key] switch
+        {
+            null => string.Empty,
+            System.Text.Json.Nodes.JsonValue value when value.TryGetValue<string>(out var text) => text,
+            var other => other.ToString()
+        };
+    }
+
+    public async Task SetDescriptionAsync(int id, string description, CancellationToken ct = default)
+    {
+        var path = $"v1/documents/{id}";
+        var json = await _client.GetJsonAsync(path, ct);
+        var root = System.Text.Json.Nodes.JsonNode.Parse(json.GetRawText()) as System.Text.Json.Nodes.JsonObject
+                   ?? throw new BoOperationException("Rapor bilgisi okunamadı (/v1/documents).");
+
+        // GET yanıtı olduğu gibi geri gönderilir; yalnızca description alanı değişir
+        var (owner, key) = FindField(root, DescriptionFieldNames);
+        if (owner is null || key is null)
+        {
+            owner = root;
+            key = "description";
+        }
+
+        owner[key] = description;
+        await _client.PutJsonAsync(path, root, ct);
+
+        // Doğrulama
+        var after = await GetDescriptionAsync(id, ct);
+        if (!DescriptionText.Same(after, description))
+        {
+            _logger.LogWarning("Açıklama güncelleme isteği kabul edildi ama değer değişmedi. Rapor {Id}. BO: '{Actual}'", id, after);
+            throw new BoOperationException("Açıklama güncelleme isteği kabul edildi ama BO'daki değer değişmedi.");
+        }
+
+        _logger.LogInformation("Rapor açıklaması güncellendi: {Id}", id);
+    }
+
     /// <summary>Alanı kökte veya tek seviye iç nesnede arar (büyük/küçük harf duyarsız).</summary>
     private static (System.Text.Json.Nodes.JsonObject? Owner, string? Key) FindField(
         System.Text.Json.Nodes.JsonObject root, IReadOnlyList<string> names)

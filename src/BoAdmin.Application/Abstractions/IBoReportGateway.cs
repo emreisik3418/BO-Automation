@@ -53,6 +53,12 @@ public interface IBoReportGateway
     /// <summary>Raporun keyword'lerini yazar ve yazıldığını doğrular (GET + PUT /v1/documents/{id}).</summary>
     Task SetKeywordsAsync(int id, string keywords, CancellationToken ct = default);
 
+    /// <summary>Raporun mevcut açıklaması (GET /v1/documents/{id}).</summary>
+    Task<string> GetDescriptionAsync(int id, CancellationToken ct = default);
+
+    /// <summary>Raporun açıklamasını yazar ve yazıldığını doğrular (GET + PUT /v1/documents/{id}).</summary>
+    Task SetDescriptionAsync(int id, string description, CancellationToken ct = default);
+
     /// <summary>Raporun adını değiştirir ve yeni adın yazıldığını doğrular.</summary>
     Task RenameAsync(int id, string newName, CancellationToken ct = default);
 

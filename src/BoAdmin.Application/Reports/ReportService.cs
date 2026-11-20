@@ -52,6 +52,14 @@ public interface IReportService
     /// <summary>Onaylanan keyword değişikliklerini uygular. Her rapor ayrı işlenir ve audit'e yazılır.</summary>
     Task<IReadOnlyList<DeleteItemResult>> ExecuteKeywordsAsync(IReadOnlyList<KeywordRequest> requests, int confirmationCount,
         IOperationProgress? progress = null);
+
+    /// <summary>Excel satırlarındaki CUID'leri çözer, mevcut açıklamaları okur ve önizleme döndürür.</summary>
+    Task<DescriptionPreviewDto> PrepareDescriptionsAsync(IReadOnlyList<DescriptionRow> rows, IReadOnlyList<RenameRowIssue> fileIssues,
+        IOperationProgress? progress = null, CancellationToken ct = default);
+
+    /// <summary>Onaylanan açıklama değişikliklerini uygular. Her rapor ayrı işlenir ve audit'e yazılır.</summary>
+    Task<IReadOnlyList<DeleteItemResult>> ExecuteDescriptionsAsync(IReadOnlyList<DescriptionRequest> requests, int confirmationCount,
+        IOperationProgress? progress = null);
 }
 
 public sealed class ReportService : IReportService
@@ -591,6 +599,195 @@ public sealed class ReportService : IReportService
             batchId, results.Count(r => r.Success), results.Count(r => !r.Success));
 
         return results;
+    }
+
+    // ------------------------------------------------------------------
+    // Excel ile toplu açıklama (description) güncelleme
+    // ------------------------------------------------------------------
+
+    public const int DescriptionPreviewSteps = 3;
+    public const int DescriptionExecuteSteps = 2;
+
+    public async Task<DescriptionPreviewDto> PrepareDescriptionsAsync(IReadOnlyList<DescriptionRow> rows, IReadOnlyList<RenameRowIssue> fileIssues,
+        IOperationProgress? progress = null, CancellationToken ct = default)
+    {
+        progress ??= NullOperationProgress.Instance;
+
+        // 1) Satır kontrolü
+        progress.Phase("Excel satırları kontrol ediliyor", rows.Count);
+        var invalid = new List<RenameRowIssue>(fileIssues);
+        var valid = new List<DescriptionRow>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var row in rows)
+        {
+            progress.Step();
+
+            var error = DescriptionText.Validate(row.Description);
+            if (error is not null)
+            {
+                invalid.Add(new RenameRowIssue(row.RowNumber, row.Cuid, error));
+                continue;
+            }
+
+            if (!seen.Add(row.Cuid))
+            {
+                invalid.Add(new RenameRowIssue(row.RowNumber, row.Cuid, "Bu CUID dosyada daha önce geçiyor; yalnızca ilk satır işlenir."));
+                continue;
+            }
+
+            valid.Add(row with { Description = DescriptionText.Normalize(row.Description) });
+        }
+
+        if (valid.Count == 0)
+            throw new AppValidationException(invalid.Count > 0
+                ? $"Excel'de işlenebilecek satır yok ({invalid.Count} satır hatalı). İlk hata: satır {invalid[0].RowNumber} - {invalid[0].Reason}"
+                : "Excel'de CUID ve açıklama içeren satır bulunamadı.");
+
+        if (valid.Count > MaxBulkSize)
+            throw new AppValidationException(
+                $"Tek seferde en fazla {MaxBulkSize} rapor işlenebilir. Dosyada: {valid.Count}. Lütfen dosyayı bölün.");
+
+        // 2) Raporlar
+        progress.Phase("Raporlar BO'da aranıyor", valid.Count);
+        var reports = new List<ReportListItemDto>();
+        foreach (var chunk in valid.Select(r => r.Cuid).Chunk(LookupChunkSize))
+        {
+            reports.AddRange(await _gateway.GetReportsByCuidsAsync(chunk, ct));
+            for (var i = 0; i < chunk.Length; i++) progress.Step();
+        }
+
+        var byCuid = reports.Where(r => r.Cuid is not null)
+            .GroupBy(r => r.Cuid!, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+        var found = new List<(DescriptionRow Row, ReportListItemDto Report)>();
+        var notFound = new List<RenameRowIssue>();
+        foreach (var row in valid)
+        {
+            if (byCuid.TryGetValue(row.Cuid, out var report)) found.Add((row, report));
+            else notFound.Add(new RenameRowIssue(row.RowNumber, row.Cuid, "Bu ortamda bulunamadı veya desteklenen bir rapor türü değil."));
+        }
+
+        // 3) Mevcut açıklamalar (rapor başına bir istek)
+        progress.Phase("Mevcut açıklamalar okunuyor", found.Count);
+        var items = new List<DescriptionPreviewItemDto>();
+        foreach (var (row, report) in found)
+        {
+            progress.Current(report.Name);
+
+            string current;
+            try
+            {
+                current = DescriptionText.Normalize(await _gateway.GetDescriptionAsync(report.Id, ct));
+            }
+            catch (BoException ex)
+            {
+                items.Add(new DescriptionPreviewItemDto(row.RowNumber, report, "?", row.Description, false,
+                    $"Mevcut açıklama okunamadı: {ex.UserMessage}"));
+                progress.Step(report.Name);
+                continue;
+            }
+
+            var unchanged = DescriptionText.Same(current, row.Description);
+            items.Add(new DescriptionPreviewItemDto(row.RowNumber, report, current, row.Description,
+                CanProcess: !unchanged,
+                Reason: unchanged ? "Yeni açıklama mevcut açıklamayla aynı." : null));
+
+            progress.Step(report.Name);
+        }
+
+        return new DescriptionPreviewDto(items, notFound, invalid.OrderBy(i => i.RowNumber).ToList());
+    }
+
+    public async Task<IReadOnlyList<DeleteItemResult>> ExecuteDescriptionsAsync(IReadOnlyList<DescriptionRequest> requests, int confirmationCount,
+        IOperationProgress? progress = null)
+    {
+        progress ??= NullOperationProgress.Instance;
+        var ct = CancellationToken.None; // yarıda kalmasın
+
+        var distinct = requests.Where(r => r.ReportId > 0).GroupBy(r => r.ReportId).Select(g => g.First()).ToList();
+        var ids = ValidateIds(distinct.Select(r => r.ReportId).ToList(), MaxBulkSize);
+        ValidateConfirmation(confirmationCount, ids.Count);
+
+        progress.Phase("Raporlar doğrulanıyor");
+        var reports = (await _gateway.GetReportsByIdsAsync(ids, ct)).ToDictionary(r => r.Id);
+        var batchId = Guid.NewGuid();
+
+        _logger.LogInformation("Toplu açıklama güncelleme başladı. Batch: {BatchId}, Ortam: {Environment}, Kullanıcı: {User}, Rapor: {Count}",
+            batchId, _environment.Key, _currentUser.UserName, ids.Count);
+
+        progress.Phase("Açıklamalar güncelleniyor", distinct.Count);
+        var results = new List<DeleteItemResult>(distinct.Count);
+
+        foreach (var request in distinct)
+        {
+            DeleteItemResult result;
+            reports.TryGetValue(request.ReportId, out var report);
+
+            if (report is null)
+            {
+                result = new DeleteItemResult(request.ReportId, $"(ID: {request.ReportId})", null, ReportOperation.Description, false,
+                    "Rapor bulunamadı veya desteklenen bir rapor türü değil.");
+            }
+            else
+            {
+                progress.Current(report.Name);
+                var newValue = DescriptionText.Normalize(request.Description);
+                var error = DescriptionText.Validate(newValue);
+
+                if (error is not null)
+                {
+                    result = new DeleteItemResult(report.Id, report.Name, report.FolderPath, ReportOperation.Description, false, error);
+                }
+                else
+                {
+                    try
+                    {
+                        var current = DescriptionText.Normalize(await _gateway.GetDescriptionAsync(report.Id, ct));
+                        if (DescriptionText.Same(current, newValue))
+                        {
+                            result = new DeleteItemResult(report.Id, report.Name, report.FolderPath, ReportOperation.Description, true,
+                                "Değişiklik gerekmedi; açıklama zaten aynı.");
+                        }
+                        else
+                        {
+                            await _gateway.SetDescriptionAsync(report.Id, newValue, ct);
+                            result = new DeleteItemResult(report.Id, report.Name, report.FolderPath, ReportOperation.Description, true,
+                                $"Açıklama güncellendi: '{Shorten(current)}' → '{Shorten(newValue)}'");
+                        }
+                    }
+                    catch (Exception ex) when (ex is BoException or AppValidationException)
+                    {
+                        _logger.LogWarning(ex, "Açıklama güncellenemedi. Rapor: {ReportId} {ReportName}", report.Id, report.Name);
+                        result = new DeleteItemResult(report.Id, report.Name, report.FolderPath, ReportOperation.Description, false,
+                            $"Açıklama güncellenemedi: {UserMessageOf(ex)}");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Açıklama güncellemede beklenmeyen hata. Rapor: {ReportId}", report.Id);
+                        result = new DeleteItemResult(report.Id, report.Name, report.FolderPath, ReportOperation.Description, false,
+                            $"Beklenmeyen hata: {ex.Message}");
+                    }
+                }
+            }
+
+            results.Add(result);
+            await WriteAuditAsync(result, report, null, batchId);
+            progress.Step(result.ReportName, result.Success);
+        }
+
+        _logger.LogInformation("Toplu açıklama güncelleme bitti. Batch: {BatchId}, Başarılı: {Ok}, Başarısız: {Fail}",
+            batchId, results.Count(r => r.Success), results.Count(r => !r.Success));
+
+        return results;
+    }
+
+    /// <summary>Sonuç mesajı ve audit için uzun açıklamayı tek satıra indirip kısaltır.</summary>
+    private static string Shorten(string value, int max = 300)
+    {
+        var oneLine = value.Replace('\n', ' ');
+        return oneLine.Length <= max ? oneLine : oneLine[..max] + "…";
     }
 
     /// <summary>Yeni ad kuralları. Hata yoksa null.</summary>

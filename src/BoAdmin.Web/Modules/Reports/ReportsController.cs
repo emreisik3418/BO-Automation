@@ -31,6 +31,10 @@ namespace BoAdmin.Web.Modules.Reports;
 ///  GET  /Reports/KeywordsTemplate -> boş Excel şablonu
 ///  POST /Reports/KeywordsPreview  -> Excel önizleme (arka plan işi)
 ///  POST /Reports/KeywordsExecute  -> keyword güncelleme (arka plan işi)
+///  GET  /Reports/Descriptions         -> Excel ile toplu açıklama güncelleme: dosya yükleme
+///  GET  /Reports/DescriptionsTemplate -> boş Excel şablonu
+///  POST /Reports/DescriptionsPreview  -> Excel önizleme (arka plan işi)
+///  POST /Reports/DescriptionsExecute  -> açıklama güncelleme (arka plan işi)
 ///  GET  /Reports/Job/{id}       -> ilerleme ekranı
 ///  GET  /Reports/JobStatus/{id} -> ilerleme durumu (JSON, saniyede bir sorulur)
 ///  GET  /Reports/JobResult/{id} -> iş bitince sonuç (önizleme veya sonuç sayfası)
@@ -480,6 +484,112 @@ public sealed class ReportsController : Controller
     }
 
     // ------------------------------------------------------------------
+    // Excel ile toplu açıklama (description) güncelleme
+    // ------------------------------------------------------------------
+
+    [HttpGet]
+    public IActionResult Descriptions() => View(new DescriptionUploadViewModel());
+
+    [HttpGet]
+    public IActionResult DescriptionsTemplate() =>
+        File(DescriptionFileReader.CreateTemplate(),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "rapor-aciklama-guncelleme-sablonu.xlsx");
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    [RequestSizeLimit(MaxExcelBytes + 64 * 1024)]
+    public async Task<IActionResult> DescriptionsPreview(IFormFile? file, CancellationToken ct)
+    {
+        var form = new DescriptionUploadViewModel();
+
+        if (file is null || file.Length == 0)
+        {
+            form.ErrorMessage = "Lütfen CUID ve yeni açıklamaları içeren bir Excel dosyası (.xlsx) seçin.";
+            return View("Descriptions", form);
+        }
+
+        var ext = Path.GetExtension(file.FileName);
+        if (!string.Equals(ext, ".xlsx", StringComparison.OrdinalIgnoreCase) && !string.Equals(ext, ".xlsm", StringComparison.OrdinalIgnoreCase))
+        {
+            form.ErrorMessage = "Yalnızca .xlsx dosyası yüklenebilir. Eski .xls dosyasını Excel'de 'Farklı Kaydet > .xlsx' ile dönüştürün.";
+            return View("Descriptions", form);
+        }
+
+        if (file.Length > MaxExcelBytes)
+        {
+            form.ErrorMessage = "Dosya en fazla 5 MB olabilir.";
+            return View("Descriptions", form);
+        }
+
+        DescriptionFileReader.ReadResult read;
+        try
+        {
+            await using var ms = new MemoryStream();
+            await file.CopyToAsync(ms, ct);
+            ms.Position = 0;
+            read = DescriptionFileReader.Read(ms);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            form.ErrorMessage = "Excel dosyası okunamadı. Dosyanın bozuk veya parola korumalı olmadığından emin olun.";
+            return View("Descriptions", form);
+        }
+
+        var fileName = Path.GetFileName(file.FileName);
+        var env = _environmentAccessor.Current;
+
+        var job = _jobs.Start("Açıklama önizlemesi hazırlanıyor", nameof(Descriptions), _currentUser.UserName, _currentUser.DisplayName,
+            env, ReportService.DescriptionPreviewSteps,
+            async (sp, progress, jobCt) =>
+            {
+                var service = sp.GetRequiredService<IReportService>();
+                var preview = await service.PrepareDescriptionsAsync(read.Rows, read.Issues, progress, jobCt);
+                return new DescriptionPreviewViewModel(preview) { FileName = fileName, EnvironmentKey = env.Key };
+            });
+
+        return RedirectToAction(nameof(Job), new { id = job.Id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public IActionResult DescriptionsExecute(DescriptionExecuteModel model)
+    {
+        if (!EnvironmentMatches(model.Environment, out var redirect, nameof(Descriptions)))
+            return redirect;
+
+        // Değişiklikler formdan değil, sunucudaki önizlemeden alınır
+        var previewJob = _jobs.Get(model.PreviewJobId, _currentUser.UserName);
+        if (previewJob?.Result is not DescriptionPreviewViewModel preview)
+        {
+            TempData["Warning"] = "Önizleme bulunamadı veya süresi doldu. Lütfen Excel dosyasını yeniden yükleyin.";
+            return RedirectToAction(nameof(Descriptions));
+        }
+
+        var requests = preview.Preview.Processable
+            .Select(i => new DescriptionRequest(i.Report.Id, i.NewValue))
+            .ToList();
+
+        if (requests.Count == 0 || model.ConfirmationCount != requests.Count)
+        {
+            TempData["Warning"] = $"Onay sayısı ({model.ConfirmationCount}) güncellenecek rapor sayısıyla ({requests.Count}) eşleşmiyor.";
+            return RedirectToAction(nameof(JobResult), new { id = model.PreviewJobId });
+        }
+
+        var confirmation = model.ConfirmationCount;
+        var job = _jobs.Start($"{requests.Count} raporun açıklaması güncelleniyor", nameof(Descriptions), _currentUser.UserName, _currentUser.DisplayName,
+            _environmentAccessor.Current, ReportService.DescriptionExecuteSteps,
+            async (sp, progress, _) =>
+            {
+                var service = sp.GetRequiredService<IReportService>();
+                var results = await service.ExecuteDescriptionsAsync(requests, confirmation, progress);
+                return new DeleteResultViewModel(results, ReportOperation.Description);
+            });
+
+        return RedirectToAction(nameof(Job), new { id = job.Id });
+    }
+
+    // ------------------------------------------------------------------
     // Arka plan işleri: ilerleme ekranı
     // ------------------------------------------------------------------
 
@@ -556,6 +666,9 @@ public sealed class ReportsController : Controller
             case KeywordPreviewViewModel keywordPreview:
                 keywordPreview.PreviewJobId = job.Id;
                 return View("KeywordsPreview", keywordPreview);
+            case DescriptionPreviewViewModel descriptionPreview:
+                descriptionPreview.PreviewJobId = job.Id;
+                return View("DescriptionsPreview", descriptionPreview);
             case DeleteResultViewModel result:
                 return View("DeleteResult", result);
             default:
