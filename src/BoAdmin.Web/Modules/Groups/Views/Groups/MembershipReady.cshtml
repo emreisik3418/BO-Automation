@@ -1,0 +1,33 @@
+@using BoAdmin.Web.Infrastructure
+@model MembershipReadyViewModel
+@{
+    ViewData["Title"] = "Üyelik Raporu Hazır";
+    ViewData["Subtitle"] = Model.Scope;
+    var r = Model.Report;
+    var users = r.Rows.Count(x => x.MemberType == "Kullanıcı");
+    var distinctUsers = r.Rows.Where(x => x.MemberType == "Kullanıcı").Select(x => x.MemberName).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+}
+
+<div class="row g-3 mb-3">
+    <div class="col-6 col-md-3"><div class="summary-tile"><div class="summary-label">Grup</div><div class="summary-value">@r.GroupCount</div></div></div>
+    <div class="col-6 col-md-3"><div class="summary-tile"><div class="summary-label">Satır</div><div class="summary-value">@r.Rows.Count</div></div></div>
+    <div class="col-6 col-md-3"><div class="summary-tile"><div class="summary-label">Kullanıcı üyeliği</div><div class="summary-value">@users</div></div></div>
+    <div class="col-6 col-md-3"><div class="summary-tile"><div class="summary-label">Farklı kullanıcı</div><div class="summary-value">@distinctUsers</div></div></div>
+</div>
+
+@foreach (var w in r.Warnings)
+{
+    <div class="alert alert-warning small">@w</div>
+}
+
+<div class="card card-body">
+    <div class="d-flex flex-wrap align-items-center gap-3">
+        <span class="stat-icon tone-brand m-0">@Icons.Get("sheet")</span>
+        <div class="flex-grow-1">
+            <div class="fw-semibold">@Model.FileName</div>
+            <div class="small text-muted">Rapor yaklaşık 2 saat indirilebilir; sonra yeniden oluşturmanız gerekir.</div>
+        </div>
+        <a class="btn btn-success" asp-action="JobFile" asp-route-id="@Model.JobId">@Icons.Get("download", 16) Excel'i indir</a>
+        <a class="btn btn-outline-secondary" asp-action="Membership">Yeni rapor</a>
+    </div>
+</div>

@@ -938,3 +938,13 @@ a.sort-link:hover { color: var(--app-brand); }
 }
 .desc-old { color: #64748b; }
 .desc-new { color: #065f46; background: #ecfdf5; border-color: #a7f3d0; }
+
+/* Detay listesi (kullanıcı / grup bilgileri) */
+.detail-list {
+    display: grid;
+    grid-template-columns: 8.5rem 1fr;
+    gap: .55rem 1rem;
+    font-size: .9rem;
+}
+.detail-list dt { color: #64748b; font-weight: 500; }
+.detail-list dd { margin: 0; word-break: break-word; }

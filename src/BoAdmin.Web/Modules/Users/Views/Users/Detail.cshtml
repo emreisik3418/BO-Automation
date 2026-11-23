@@ -1,0 +1,74 @@
+@using BoAdmin.Web.Infrastructure
+@model UserDetailViewModel
+@{
+    var u = Model.Detail.User;
+    var groups = Model.Detail.Groups;
+    ViewData["Title"] = u.FullName ?? u.Name;
+    ViewData["Subtitle"] = "Kullanıcı bilgileri ve üye olduğu gruplar.";
+}
+
+<div class="mb-3">
+    <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm">&lsaquo; Geri</a>
+</div>
+
+<div class="row g-4">
+    <div class="col-xl-5">
+        <div class="card">
+            <div class="card-header d-flex align-items-center gap-2">
+                @Icons.Get("user", 18) Kullanıcı
+                <span class="status-pill ms-auto @(u.Disabled ? "status-fail" : "status-ok")">@(u.Disabled ? "Pasif" : "Aktif")</span>
+            </div>
+            <div class="card-body">
+                <dl class="detail-list mb-0">
+                    <dt>Hesap</dt><dd class="fw-semibold">@u.Name</dd>
+                    <dt>Tam ad</dt><dd>@(u.FullName ?? "—")</dd>
+                    <dt>E-posta</dt><dd>@(u.Email ?? "—")</dd>
+                    <dt>Son giriş</dt><dd>@(u.LastLogon?.ToString("dd.MM.yyyy HH:mm") ?? "Hiç giriş yapmamış")</dd>
+                    <dt>Oluşturulma</dt><dd>@(u.CreatedAt?.ToString("dd.MM.yyyy HH:mm") ?? "—")</dd>
+                    <dt>Açıklama</dt><dd>@(u.Description ?? "—")</dd>
+                    <dt>ID</dt><dd class="mono">@u.Id</dd>
+                    <dt>CUID</dt><dd class="mono">@u.Cuid</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-7">
+        <div class="card">
+            <div class="toolbar">
+                <span class="toolbar-title">Üye olduğu gruplar</span>
+                <span class="toolbar-meta">@groups.Count grup (doğrudan üyelik)</span>
+            </div>
+            @if (groups.Count == 0)
+            {
+                <div class="empty-state py-4"><div class="empty-title">Kullanıcı hiçbir gruba doğrudan üye değil</div></div>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="table table-modern align-middle mb-0">
+                        <thead><tr><th>Grup</th><th>Açıklama</th></tr></thead>
+                        <tbody>
+                            @foreach (var g in groups)
+                            {
+                                <tr>
+                                    <td>
+                                        @if (Model.CanViewGroups)
+                                        {
+                                            <a class="cell-title text-decoration-none" asp-controller="Groups" asp-action="Detail" asp-route-id="@g.Id">@g.Name</a>
+                                        }
+                                        else
+                                        {
+                                            <span class="cell-title">@g.Name</span>
+                                        }
+                                    </td>
+                                    <td class="small text-muted">@g.Description</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>

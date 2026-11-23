@@ -1,0 +1,95 @@
+@using BoAdmin.Web.Infrastructure
+@model GroupSearchViewModel
+@{
+    ViewData["Title"] = "Grup Arama";
+    ViewData["Subtitle"] = "BO gruplarını arayın; üyelerini, alt ve üst gruplarını görün.";
+    var c = Model.Criteria;
+}
+
+<form method="get" asp-action="Index" class="card mb-4">
+    <input type="hidden" name="@GroupSearchViewModel.SearchFlag" value="1" />
+    <div class="card-body">
+        <div class="filter-grid">
+            <div>
+                <label asp-for="Criteria.Text" class="form-label small mb-1">Grup adı</label>
+                <div class="input-icon">
+                    @Icons.Get("search", 16)
+                    <input asp-for="Criteria.Text" class="form-control" placeholder="Ad içerir... (boş: tüm gruplar)" autocomplete="off" />
+                </div>
+            </div>
+        </div>
+        <div class="filter-actions">
+            <button type="submit" class="btn btn-primary px-4">@Icons.Get("search", 16) Ara</button>
+            <a asp-action="Index" class="btn btn-outline-secondary">Temizle</a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <label asp-for="Criteria.PageSize" class="small text-muted mb-0">Sayfa başına</label>
+                <select asp-for="Criteria.PageSize" class="form-select form-select-sm w-auto"
+                        asp-items="@(new SelectList(GroupSearchViewModel.PageSizes))"></select>
+            </div>
+        </div>
+    </div>
+</form>
+
+@if (Model.ErrorMessage is not null)
+{
+    <div class="alert alert-danger">@Model.ErrorMessage</div>
+}
+
+@if (!Model.Searched)
+{
+    <div class="card">
+        <div class="empty-state">
+            <span class="empty-icon">@Icons.Get("users", 28)</span>
+            <div class="empty-title">Aramaya başlayın</div>
+            <p class="empty-text">Grup adının bir kısmını yazıp <strong>Ara</strong>'ya basın. Boş bırakırsanız tüm gruplar listelenir.</p>
+        </div>
+    </div>
+}
+
+@if (Model.Result is { } result)
+{
+    <div class="card">
+        <div class="toolbar">
+            <span class="toolbar-title">Sonuçlar</span>
+            <span class="toolbar-meta">Sayfa @result.Page &middot; bu sayfada @result.Items.Count grup</span>
+            <a class="btn btn-outline-success btn-sm ms-auto" asp-action="Membership" asp-route-text="@c.Text">
+                @Icons.Get("sheet", 15) Bu gruplar için üyelik raporu
+            </a>
+        </div>
+
+        <div class="table-wrap">
+            <table class="table table-hover table-modern align-middle">
+                <thead><tr><th>Grup</th><th>Açıklama</th><th>Oluşturulma</th><th>ID</th><th></th></tr></thead>
+                <tbody>
+                    @if (result.Items.Count == 0)
+                    {
+                        <tr><td colspan="5"><div class="empty-state py-4"><div class="empty-title">Kriterlere uyan grup bulunamadı</div></div></td></tr>
+                    }
+                    @foreach (var g in result.Items)
+                    {
+                        <tr>
+                            <td><a class="cell-title text-decoration-none" asp-action="Detail" asp-route-id="@g.Id">@g.Name</a></td>
+                            <td class="small text-muted">@g.Description</td>
+                            <td class="text-nowrap">@g.CreatedAt?.ToString("dd.MM.yyyy")</td>
+                            <td class="cell-sub">@g.Id</td>
+                            <td class="text-end"><a class="btn btn-outline-secondary btn-sm" asp-action="Detail" asp-route-id="@g.Id" title="Detay">@Icons.Get("arrow-right", 15)</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="pager">
+            <span>Sayfa başına @c.PageSize kayıt</span>
+            <ul class="pagination pagination-sm">
+                <li class="page-item @(result.HasPreviousPage ? "" : "disabled")">
+                    <a class="page-link" asp-action="Index" asp-all-route-data="@Model.RouteValues(page: result.Page - 1)">&lsaquo; Önceki</a>
+                </li>
+                <li class="page-item active"><span class="page-link">@result.Page</span></li>
+                <li class="page-item @(result.HasNextPage ? "" : "disabled")">
+                    <a class="page-link" asp-action="Index" asp-all-route-data="@Model.RouteValues(page: result.Page + 1)">Sonraki &rsaquo;</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+}

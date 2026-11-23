@@ -1,0 +1,143 @@
+@using BoAdmin.Web.Infrastructure
+@model UserSearchViewModel
+@{
+    ViewData["Title"] = "Kullanıcı Arama";
+    ViewData["Subtitle"] = "BO kullanıcılarını arayın, detayını ve üye olduğu grupları görün, listeyi Excel'e aktarın.";
+    var c = Model.Criteria;
+}
+
+<form method="get" asp-action="Index" class="card mb-4">
+    <input type="hidden" name="@UserSearchViewModel.SearchFlag" value="1" />
+    <input type="hidden" asp-for="Criteria.SortBy" />
+    <input type="hidden" asp-for="Criteria.SortDescending" />
+
+    <div class="card-body">
+        <div class="filter-grid">
+            <div>
+                <label asp-for="Criteria.Text" class="form-label small mb-1">Hesap, ad veya e-posta</label>
+                <div class="input-icon">
+                    @Icons.Get("search", 16)
+                    <input asp-for="Criteria.Text" class="form-control" placeholder="İçerir..." autocomplete="off" />
+                </div>
+            </div>
+
+            <div>
+                <label asp-for="Criteria.Status" class="form-label small mb-1">Durum</label>
+                <select asp-for="Criteria.Status" class="form-select">
+                    @foreach (var s in Enum.GetValues<UserStatusFilter>())
+                    {
+                        <option value="@s" selected="@(s == c.Status)">@UserSearchViewModel.StatusText(s)</option>
+                    }
+                </select>
+            </div>
+
+            <div>
+                <label asp-for="Criteria.LastLogonBefore" class="form-label small mb-1">Son girişi şu tarihten önce</label>
+                <input asp-for="Criteria.LastLogonBefore" type="date" asp-format="{0:yyyy-MM-dd}" class="form-control" />
+            </div>
+        </div>
+
+        <div class="filter-actions">
+            <button type="submit" class="btn btn-primary px-4">@Icons.Get("search", 16) Ara</button>
+            <a asp-action="Index" class="btn btn-outline-secondary">Temizle</a>
+
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <label asp-for="Criteria.PageSize" class="small text-muted mb-0">Sayfa başına</label>
+                <select asp-for="Criteria.PageSize" class="form-select form-select-sm w-auto"
+                        asp-items="@(new SelectList(UserSearchViewModel.PageSizes))"></select>
+            </div>
+        </div>
+    </div>
+</form>
+
+@if (Model.ErrorMessage is not null)
+{
+    <div class="alert alert-danger">@Model.ErrorMessage</div>
+}
+
+@if (!Model.Searched)
+{
+    <div class="card">
+        <div class="empty-state">
+            <span class="empty-icon">@Icons.Get("user", 28)</span>
+            <div class="empty-title">Aramaya başlayın</div>
+            <p class="empty-text">Hızlı açılması için liste otomatik yüklenmez. Filtreleri doldurup <strong>Ara</strong>'ya basın ya da hazır filtrelerden birini seçin.</p>
+            <div class="chip-row">
+                <a class="chip" asp-action="Index" asp-all-route-data="@UserSearchViewModel.QuickFilter(sortBy: UserSortField.LastLogon, descending: true)">@Icons.Get("clock", 15) Son giriş yapanlar</a>
+                <a class="chip" asp-action="Index" asp-all-route-data="@UserSearchViewModel.QuickFilter(status: UserStatusFilter.Disabled)">@Icons.Get("lock", 15) Pasif kullanıcılar</a>
+                <a class="chip" asp-action="Index" asp-all-route-data="@UserSearchViewModel.QuickFilter(status: UserStatusFilter.Active, inactiveDays: 90, sortBy: UserSortField.LastLogon)">@Icons.Get("calendar", 15) 90 gündür giriş yapmayan aktifler</a>
+                <a class="chip" asp-action="Index" asp-all-route-data="@UserSearchViewModel.QuickFilter(sortBy: UserSortField.Created, descending: true)">@Icons.Get("sparkle", 15) Yeni oluşturulanlar</a>
+            </div>
+        </div>
+    </div>
+}
+
+@if (Model.Result is { } result)
+{
+    <div class="card">
+        <div class="toolbar">
+            <span class="toolbar-title">Sonuçlar</span>
+            <span class="toolbar-meta">Sayfa @result.Page &middot; bu sayfada @result.Items.Count kullanıcı</span>
+            <a class="btn btn-outline-success btn-sm ms-auto" asp-action="Export" asp-all-route-data="@Model.RouteValues(page: 1)"
+               title="Filtreye uyan tüm kullanıcılar (en fazla @PrincipalService.MaxUserExport)">
+                @Icons.Get("download", 15) Excel'e aktar
+            </a>
+        </div>
+
+        <div class="table-wrap">
+            <table class="table table-hover table-modern align-middle">
+                <thead>
+                    <tr>
+                        <th><a class="sort-link" asp-action="Index" asp-all-route-data="@Model.SortRouteValues(UserSortField.Name)">Hesap<span class="sort-ind">@Model.SortIndicator(UserSortField.Name)</span></a></th>
+                        <th><a class="sort-link" asp-action="Index" asp-all-route-data="@Model.SortRouteValues(UserSortField.FullName)">Tam ad<span class="sort-ind">@Model.SortIndicator(UserSortField.FullName)</span></a></th>
+                        <th>E-posta</th>
+                        <th>Durum</th>
+                        <th><a class="sort-link" asp-action="Index" asp-all-route-data="@Model.SortRouteValues(UserSortField.LastLogon)">Son giriş<span class="sort-ind">@Model.SortIndicator(UserSortField.LastLogon)</span></a></th>
+                        <th><a class="sort-link" asp-action="Index" asp-all-route-data="@Model.SortRouteValues(UserSortField.Created)">Oluşturulma<span class="sort-ind">@Model.SortIndicator(UserSortField.Created)</span></a></th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (result.Items.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="7">
+                                <div class="empty-state py-4">
+                                    <div class="empty-title">Kriterlere uyan kullanıcı bulunamadı</div>
+                                    <p class="empty-text mb-0">Filtreleri genişletip tekrar deneyin.</p>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    @foreach (var u in result.Items)
+                    {
+                        <tr>
+                            <td><a class="cell-title text-decoration-none" asp-action="Detail" asp-route-id="@u.Id">@u.Name</a></td>
+                            <td>@u.FullName</td>
+                            <td class="small">@u.Email</td>
+                            <td><span class="status-pill @(u.Disabled ? "status-fail" : "status-ok")">@(u.Disabled ? "Pasif" : "Aktif")</span></td>
+                            <td class="text-nowrap">@(u.LastLogon?.ToString("dd.MM.yyyy HH:mm") ?? "—")</td>
+                            <td class="text-nowrap">@u.CreatedAt?.ToString("dd.MM.yyyy")</td>
+                            <td class="text-end">
+                                <a class="btn btn-outline-secondary btn-sm" asp-action="Detail" asp-route-id="@u.Id" title="Detay">@Icons.Get("arrow-right", 15)</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="pager">
+            <span>Sayfa başına @c.PageSize kayıt</span>
+            <ul class="pagination pagination-sm">
+                <li class="page-item @(result.HasPreviousPage ? "" : "disabled")">
+                    <a class="page-link" asp-action="Index" asp-all-route-data="@Model.RouteValues(page: result.Page - 1)">&lsaquo; Önceki</a>
+                </li>
+                <li class="page-item active"><span class="page-link">@result.Page</span></li>
+                <li class="page-item @(result.HasNextPage ? "" : "disabled")">
+                    <a class="page-link" asp-action="Index" asp-all-route-data="@Model.RouteValues(page: result.Page + 1)">Sonraki &rsaquo;</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+}

@@ -52,12 +52,21 @@ public sealed class ModuleRegistry
             }),
 
         new ModuleDescriptor(ModuleNames.Users, "Kullanıcı Yönetimi",
-            "BO kullanıcılarını arama ve yönetme",
-            "user", "Users", "Index", IsAvailable: false, Array.Empty<ModuleNavItem>()),
+            "BO kullanıcılarını arama, detay ve Excel'e aktarma",
+            "user", "Users", "Index", IsAvailable: true,
+            new[]
+            {
+                new ModuleNavItem("Kullanıcı Arama", "Index", "search", "Detail", "Export"),
+            }),
 
         new ModuleDescriptor(ModuleNames.Groups, "Grup Yönetimi",
-            "BO gruplarını ve üyeliklerini yönetme",
-            "users", "Groups", "Index", IsAvailable: false, Array.Empty<ModuleNavItem>()),
+            "BO gruplarını, üyelerini ve üyelik raporlarını görme",
+            "users", "Groups", "Index", IsAvailable: true,
+            new[]
+            {
+                new ModuleNavItem("Grup Arama", "Index", "search", "Detail"),
+                new ModuleNavItem("Üyelik Raporu", "Membership", "sheet", "MembershipReport", "MembershipReady"),
+            }),
     };
 
     public ModuleDescriptor? Find(string name) =>

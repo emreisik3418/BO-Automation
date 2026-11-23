@@ -51,6 +51,9 @@ public static class DependencyInjection
         services.AddScoped<FolderPathCache>();
         services.AddScoped<IBoReportGateway, BoReportGateway>();
 
+        // ---------------- Kullanıcı ve grup işlemleri ----------------
+        services.AddScoped<IBoPrincipalGateway, BoPrincipalGateway>();
+
         // ---------------- Audit log (dosya) ----------------
         services.AddOptions<AuditOptions>()
             .Bind(configuration.GetSection(AuditOptions.SectionName));

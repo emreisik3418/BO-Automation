@@ -1,0 +1,92 @@
+@using BoAdmin.Web.Infrastructure
+@model GroupDetailViewModel
+@{
+    var d = Model.Detail;
+    var g = d.Group;
+    ViewData["Title"] = g.Name;
+    ViewData["Subtitle"] = "Grup bilgileri, üst ve alt gruplar, kullanıcı üyeleri.";
+}
+
+<div class="d-flex flex-wrap gap-2 mb-3">
+    <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm">&lsaquo; Geri</a>
+    <form method="post" asp-action="MembershipReport" class="ms-auto d-flex gap-2 align-items-center" data-busy-form>
+        <input type="hidden" name="GroupId" value="@g.Id" />
+        <div class="form-check mb-0">
+            <input class="form-check-input" type="checkbox" name="IncludeNested" value="true" id="nested" checked />
+            <label class="form-check-label small" for="nested">Alt gruplar dahil</label>
+        </div>
+        <button type="submit" class="btn btn-outline-success btn-sm" data-busy-text="Hazırlanıyor...">@Icons.Get("sheet", 15) Üyelik raporu (Excel)</button>
+    </form>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3"><div class="summary-tile"><div class="summary-label">Kullanıcı</div><div class="summary-value">@(d.UsersTruncated ? $"{d.Users.Count}+" : d.Users.Count.ToString())</div></div></div>
+    <div class="col-6 col-md-3"><div class="summary-tile"><div class="summary-label">Alt grup</div><div class="summary-value">@d.Subgroups.Count</div></div></div>
+    <div class="col-6 col-md-3"><div class="summary-tile"><div class="summary-label">Üst grup</div><div class="summary-value">@d.ParentGroups.Count</div></div></div>
+    <div class="col-6 col-md-3"><div class="summary-tile"><div class="summary-label">ID</div><div class="summary-value mono">@g.Id</div></div></div>
+</div>
+
+@if (g.Description is not null)
+{
+    <div class="alert alert-light small">@g.Description</div>
+}
+
+<div class="row g-4">
+    <div class="col-xl-8">
+        <div class="card">
+            <div class="toolbar">
+                <span class="toolbar-title">Kullanıcılar</span>
+                <span class="toolbar-meta">doğrudan üyeler</span>
+            </div>
+            @if (d.UsersTruncated)
+            {
+                <div class="alert alert-warning small m-3 mb-0">
+                    Grupta @PrincipalService.MaxDetailUsers'den fazla kullanıcı var; ilk @PrincipalService.MaxDetailUsers gösteriliyor. Tamamı için üyelik raporunu indirin.
+                </div>
+            }
+            @if (d.Users.Count == 0)
+            {
+                <div class="empty-state py-4"><div class="empty-title">Grupta doğrudan kullanıcı yok</div></div>
+            }
+            else
+            {
+                <div class="table-wrap preview-table">
+                    <table class="table table-modern align-middle mb-0">
+                        <thead><tr><th>Hesap</th><th>Tam ad</th><th>Durum</th><th>Son giriş</th></tr></thead>
+                        <tbody>
+                            @foreach (var u in d.Users)
+                            {
+                                <tr>
+                                    <td>
+                                        @if (Model.CanViewUsers)
+                                        {
+                                            <a class="cell-title text-decoration-none" asp-controller="Users" asp-action="Detail" asp-route-id="@u.Id">@u.Name</a>
+                                        }
+                                        else
+                                        {
+                                            <span class="cell-title">@u.Name</span>
+                                        }
+                                    </td>
+                                    <td>@u.FullName</td>
+                                    <td><span class="status-pill @(u.Disabled ? "status-fail" : "status-ok")">@(u.Disabled ? "Pasif" : "Aktif")</span></td>
+                                    <td class="text-nowrap">@(u.LastLogon?.ToString("dd.MM.yyyy HH:mm") ?? "—")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="col-xl-4">
+        @await Html.PartialAsync("_GroupList", ("Alt gruplar", d.Subgroups))
+        <div class="mt-4">
+            @await Html.PartialAsync("_GroupList", ("Üye olduğu gruplar", d.ParentGroups))
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/reports.js" asp-append-version="true"></script>
+}
