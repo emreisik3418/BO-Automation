@@ -327,6 +327,8 @@ public static class OperationNames
         "BackupMove" => "Toplu yedekleme (TXT, taşıma)", // eski kayıtlar
         BoAdmin.Application.Principals.UserOperations.Enable or BoAdmin.Application.Principals.UserOperations.Disable
             or BoAdmin.Application.Principals.UserOperations.Delete => BoAdmin.Application.Principals.UserOperations.Text(operation!),
+        _ when BoAdmin.Application.Principals.MembershipOperations.IsKnown(operation)
+            => BoAdmin.Application.Principals.MembershipOperations.Text(operation!),
         _ => operation ?? string.Empty
     };
 

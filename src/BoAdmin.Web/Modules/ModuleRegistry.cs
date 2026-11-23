@@ -52,21 +52,23 @@ public sealed class ModuleRegistry
             }),
 
         new ModuleDescriptor(ModuleNames.Users, "Kullanıcı Yönetimi",
-            "BO kullanıcılarını arama, toplu aktif/pasif yapma ve silme",
+            "BO kullanıcılarını arama, toplu aktif/pasif yapma, silme ve grup üyeliği",
             "user", "Users", "Index", IsAvailable: true,
             new[]
             {
                 new ModuleNavItem("Kullanıcı Arama", "Index", "search", "Detail", "Export"),
                 new ModuleNavItem("Aktif / Pasif Yapma", "Status", "lock", "StatusPreview"),
                 new ModuleNavItem("Kullanıcı Silme", "Remove", "trash", "RemovePreview"),
+                new ModuleNavItem("Grup Üyeliği", "GroupMembership", "users", "GroupMembershipPreview", "GroupMembershipExecute"),
             }),
 
         new ModuleDescriptor(ModuleNames.Groups, "Grup Yönetimi",
-            "BO gruplarını, üyelerini ve üyelik raporlarını görme",
+            "BO grupları, alt grup ekleme ve üyelik raporları",
             "users", "Groups", "Index", IsAvailable: true,
             new[]
             {
                 new ModuleNavItem("Grup Arama", "Index", "search", "Detail"),
+                new ModuleNavItem("Alt Grup Ekleme", "Subgroups", "layers", "SubgroupsPreview", "SubgroupsExecute"),
                 new ModuleNavItem("Üyelik Raporu", "Membership", "sheet", "MembershipReport", "MembershipReady"),
             }),
     };

@@ -128,6 +128,10 @@ public sealed class BoRestClient
     public async Task DeleteAsync(string path, CancellationToken ct = default) =>
         await SendForJsonAsync(HttpMethod.Delete, path, null, ct);
 
+    /// <summary>Gövdeli DELETE (ör. gruptan üye çıkarma: { "entries": [ { "id": "123" } ] }).</summary>
+    public async Task DeleteJsonAsync(string path, object body, CancellationToken ct = default) =>
+        await SendForJsonAsync(HttpMethod.Delete, path, body, ct);
+
     // ------------------------------------------------------------------
 
     private async Task<JsonElement> SendForJsonAsync(HttpMethod method, string path, object? body, CancellationToken ct)

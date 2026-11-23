@@ -1,0 +1,124 @@
+@using BoAdmin.Web.Infrastructure
+@using BoAdmin.Application.Principals
+@model MembershipPreviewViewModel
+@inject CurrentEnvironmentAccessor CurrentEnvironment
+@{
+    var p = Model.Preview;
+    var isUser = p.MemberType == MemberType.User;
+    ViewData["Title"] = "Üyelik Önizleme";
+    ViewData["Subtitle"] = "Aşağıdaki üyelik değişiklikleri uygulanacak. Kontrol edip onaylayın.";
+    var toProcess = p.Processable;
+    var skipped = p.Skipped;
+    var adds = toProcess.Count(i => i.Add);
+    var removes = toProcess.Count - adds;
+    var confirmText = $"{adds} ekleme, {removes} çıkarma yapılacak.";
+}
+
+<div class="row g-3 mb-3">
+    <div class="col-md-3"><div class="summary-tile"><div class="summary-label">Dosya</div><div class="text-truncate fw-semibold" title="@Model.FileName">@Model.FileName</div></div></div>
+    <div class="col-6 col-md-3"><div class="summary-tile"><div class="summary-label">Ekle / Çıkar</div><div class="summary-value">@adds / @removes</div></div></div>
+    <div class="col-6 col-md-3"><div class="summary-tile"><div class="summary-label">Atlanan</div><div class="summary-value">@skipped.Count</div></div></div>
+    <div class="col-6 col-md-3"><div class="summary-tile"><div class="summary-label">Hatalı / bulunamayan</div><div class="summary-value @(p.Problems.Count > 0 ? "text-danger" : "")">@p.Problems.Count</div></div></div>
+</div>
+
+@if (p.Problems.Count > 0)
+{
+    <div class="alert alert-warning">
+        <strong>@p.Problems.Count satır</strong> işleme alınmayacak.
+        <details class="mt-1">
+            <summary>Satırları göster</summary>
+            <ul class="mb-0 mt-2 small">
+                @foreach (var issue in p.Problems.Take(200))
+                {
+                    <li>Satır @(issue.RowNumber)@(issue.Value is null ? "" : $" ({issue.Value})"): @issue.Reason</li>
+                }
+            </ul>
+        </details>
+    </div>
+}
+
+@if (skipped.Count > 0)
+{
+    <div class="alert alert-light small">
+        <strong>@skipped.Count satır</strong> atlanacak.
+        <details class="mt-1">
+            <summary>Listeyi göster</summary>
+            <ul class="mb-0 mt-2">
+                @foreach (var item in skipped.Take(200))
+                {
+                    <li>Satır @item.RowNumber · @item.Group.Name / @item.MemberName: @item.Reason</li>
+                }
+            </ul>
+        </details>
+    </div>
+}
+
+@if (toProcess.Count == 0)
+{
+    <div class="card">
+        <div class="empty-state">
+            <span class="empty-icon">@Icons.Get("users", 28)</span>
+            <div class="empty-title">Uygulanacak değişiklik yok</div>
+            <a asp-controller="@Model.Controller" asp-action="@Model.UploadAction" class="btn btn-outline-secondary mt-2">Geri dön</a>
+        </div>
+    </div>
+}
+else
+{
+    <div class="card mb-4">
+        <div class="toolbar">
+            <span class="toolbar-title">Değişiklikler</span>
+            <span class="toolbar-meta">@toProcess.Count satır</span>
+        </div>
+        <div class="table-wrap preview-table">
+            <table class="table table-modern align-middle">
+                <thead>
+                    <tr>
+                        <th>Satır</th>
+                        <th>İşlem</th>
+                        <th>@(isUser ? "Grup" : "Üst grup")</th>
+                        <th>@(isUser ? "Kullanıcı" : "Alt grup")</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in toProcess)
+                    {
+                        <tr>
+                            <td class="cell-sub">@item.RowNumber</td>
+                            <td><span class="kind-pill @(item.Add ? "kind-Excel" : "kind-Pdf")">@(item.Add ? "Ekle" : "Çıkar")</span></td>
+                            <td class="cell-title">@item.Group.Name</td>
+                            <td>
+                                <div class="cell-title">@item.MemberName</div>
+                                @if (item.MemberDetail is not null)
+                                {
+                                    <div class="cell-sub">@item.MemberDetail</div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <form method="post" asp-controller="@Model.Controller" asp-action="@Model.ExecuteAction" id="bulkForm" class="card card-body"
+          data-critical-env="@(CurrentEnvironment.IsCritical ? CurrentEnvironment.DisplayName : null)"
+          data-confirm-text="@confirmText">
+        <input type="hidden" name="Environment" value="@Model.EnvironmentKey" />
+        <input type="hidden" name="PreviewJobId" value="@Model.PreviewJobId" />
+        <input type="hidden" name="ConfirmationCount" value="@toProcess.Count" />
+
+        <div class="alert @(CurrentEnvironment.IsCritical ? "alert-danger fw-semibold" : "alert-warning") small">
+            <strong>@CurrentEnvironment.DisplayName</strong> ortamında @confirmText
+        </div>
+
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary" id="confirmBtn">Onayla: üyelikleri güncelle</button>
+            <a asp-controller="@Model.Controller" asp-action="@Model.UploadAction" class="btn btn-outline-secondary">Vazgeç</a>
+        </div>
+    </form>
+}
+
+@section Scripts {
+    <script src="~/js/reports.js" asp-append-version="true"></script>
+}

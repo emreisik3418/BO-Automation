@@ -3,6 +3,7 @@ using BoAdmin.Application.Common.Exceptions;
 using BoAdmin.Application.Principals;
 using BoAdmin.Web.Authorization;
 using BoAdmin.Web.Infrastructure;
+using BoAdmin.Web.Models;
 using BoAdmin.Web.Infrastructure.Jobs;
 using BoAdmin.Web.Modules.Reports.ViewModels;
 using BoAdmin.Web.Modules.Users.ViewModels;
@@ -248,6 +249,30 @@ public sealed class UsersController : Controller
     private static string NavActionOf(UserActionKind kind) => kind == UserActionKind.Delete ? nameof(Remove) : nameof(Status);
 
     // ------------------------------------------------------------------
+    // Excel ile gruba kullanıcı ekleme / çıkarma
+    // ------------------------------------------------------------------
+
+    [HttpGet]
+    public IActionResult GroupMembership() =>
+        View("MembershipUpload", MembershipFlow.UploadModel(MemberType.User, "Users", nameof(GroupMembershipPreview)));
+
+    [HttpGet]
+    public IActionResult MembersTemplate() =>
+        File(MembershipFileReader.CreateTemplate(MemberType.User), PrincipalExcelWriter.ContentType,
+            MemberType.User == MemberType.User ? "gruba-kullanici-ekleme-sablonu.xlsx" : "gruba-alt-grup-ekleme-sablonu.xlsx");
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    [RequestSizeLimit(MembershipFlow.MaxFileBytes + 64 * 1024)]
+    public Task<IActionResult> GroupMembershipPreview(IFormFile? file, [FromServices] MembershipFlow flow, CancellationToken ct) =>
+        flow.PreviewAsync(this, MemberType.User, file, nameof(GroupMembership), nameof(GroupMembershipPreview), nameof(GroupMembershipExecute), nameof(Job), ct);
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public IActionResult GroupMembershipExecute(MembershipExecuteModel model, [FromServices] MembershipFlow flow) =>
+        flow.Execute(this, model, nameof(GroupMembership), nameof(Job), nameof(JobResult));
+
+    // ------------------------------------------------------------------
     // Arka plan işleri
     // ------------------------------------------------------------------
 
@@ -294,6 +319,11 @@ public sealed class UsersController : Controller
         ViewData["NavAction"] = job.NavAction;
         switch (job.Result)
         {
+            case MembershipPreviewViewModel membershipPreview:
+                membershipPreview.PreviewJobId = job.Id;
+                return View("MembershipPreview", membershipPreview);
+            case MembershipResultViewModel membershipResult:
+                return View("MembershipResult", membershipResult);
             case UserActionPreviewViewModel preview:
                 preview.PreviewJobId = job.Id;
                 return View("ActionPreview", preview);

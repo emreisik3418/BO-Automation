@@ -28,6 +28,7 @@ public static class AuthorizationServiceCollectionExtensions
 
         // Seçili ortam istek bazında çözülür
         services.AddScoped<CurrentEnvironmentAccessor>();
+        services.AddScoped<MembershipFlow>();
         services.AddScoped<ICurrentEnvironment>(sp => sp.GetRequiredService<CurrentEnvironmentAccessor>());
 
         // Giriş ekranından geçmemiş kullanıcıyı giriş ekranına yönlendir

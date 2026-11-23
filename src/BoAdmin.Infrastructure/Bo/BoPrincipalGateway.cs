@@ -283,6 +283,29 @@ public sealed class BoPrincipalGateway : IBoPrincipalGateway
         return list;
     }
 
+    public async Task<IReadOnlyList<GroupListItemDto>> GetGroupsByNamesAsync(IReadOnlyCollection<string> names, CancellationToken ct = default)
+    {
+        var list = new List<GroupListItemDto>();
+        foreach (var chunk in names.Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).Chunk(InClauseChunkSize))
+        {
+            var query = $"SELECT {GroupFields} FROM CI_SYSTEMOBJECTS WHERE {GroupKind} AND {CmsQueryBuilder.InList("SI_NAME", chunk)}";
+            list.AddRange((await _client.CmsQueryAllAsync(query, InClauseChunkSize, ct: ct)).Select(MapGroup));
+        }
+        return list;
+    }
+
+    public Task AddMemberAsync(int groupId, MemberType type, int memberId, CancellationToken ct = default) =>
+        _client.PutJsonAsync(MembersPath(groupId, type), MembersBody(memberId), ct);
+
+    public Task RemoveMemberAsync(int groupId, MemberType type, int memberId, CancellationToken ct = default) =>
+        _client.DeleteJsonAsync(MembersPath(groupId, type), MembersBody(memberId), ct);
+
+    private static string MembersPath(int groupId, MemberType type) =>
+        $"v1/usergroups/{Id(groupId)}/{(type == MemberType.User ? "users" : "usergroups")}";
+
+    private static object MembersBody(int memberId) =>
+        new { entries = new[] { new { id = Id(memberId) } } };
+
     /// <summary>
     /// GET /v1/users/{id} -> "disabled" alanı değiştirilir -> aynı JSON PUT ile geri gönderilir -> tekrar okunup doğrulanır.
     /// </summary>

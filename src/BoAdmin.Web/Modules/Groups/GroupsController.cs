@@ -3,6 +3,7 @@ using BoAdmin.Application.Principals;
 using BoAdmin.Application.Common;
 using BoAdmin.Web.Authorization;
 using BoAdmin.Web.Infrastructure;
+using BoAdmin.Web.Models;
 using BoAdmin.Web.Infrastructure.Jobs;
 using BoAdmin.Web.Modules.Groups.ViewModels;
 using BoAdmin.Web.Modules.Reports.ViewModels;
@@ -153,6 +154,30 @@ public sealed class GroupsController : Controller
     }
 
     // ------------------------------------------------------------------
+    // Excel ile gruba alt grup ekleme / çıkarma
+    // ------------------------------------------------------------------
+
+    [HttpGet]
+    public IActionResult Subgroups() =>
+        View("MembershipUpload", MembershipFlow.UploadModel(MemberType.Group, "Groups", nameof(SubgroupsPreview)));
+
+    [HttpGet]
+    public IActionResult MembersTemplate() =>
+        File(MembershipFileReader.CreateTemplate(MemberType.Group), PrincipalExcelWriter.ContentType,
+            MemberType.Group == MemberType.User ? "gruba-kullanici-ekleme-sablonu.xlsx" : "gruba-alt-grup-ekleme-sablonu.xlsx");
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    [RequestSizeLimit(MembershipFlow.MaxFileBytes + 64 * 1024)]
+    public Task<IActionResult> SubgroupsPreview(IFormFile? file, [FromServices] MembershipFlow flow, CancellationToken ct) =>
+        flow.PreviewAsync(this, MemberType.Group, file, nameof(Subgroups), nameof(SubgroupsPreview), nameof(SubgroupsExecute), nameof(Job), ct);
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public IActionResult SubgroupsExecute(MembershipExecuteModel model, [FromServices] MembershipFlow flow) =>
+        flow.Execute(this, model, nameof(Subgroups), nameof(Job), nameof(JobResult));
+
+    // ------------------------------------------------------------------
     // Arka plan işleri
     // ------------------------------------------------------------------
 
@@ -202,6 +227,15 @@ public sealed class GroupsController : Controller
         {
             ready.JobId = job.Id;
             return View("MembershipReady", ready);
+        }
+
+        switch (job.Result)
+        {
+            case MembershipPreviewViewModel membershipPreview:
+                membershipPreview.PreviewJobId = job.Id;
+                return View("MembershipPreview", membershipPreview);
+            case MembershipResultViewModel membershipResult:
+                return View("MembershipResult", membershipResult);
         }
 
         return RedirectToAction(job.NavAction);

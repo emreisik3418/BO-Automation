@@ -1,0 +1,36 @@
+@using BoAdmin.Application.Principals
+@model MembershipResultViewModel
+@{
+    ViewData["Title"] = "Üyelik Sonucu";
+    var ok = Model.Results.Count(r => r.Success);
+    var fail = Model.Results.Count - ok;
+    var isUser = Model.Type == MemberType.User;
+}
+
+<div class="row g-3 mb-3">
+    <div class="col-6 col-md-3"><div class="summary-tile"><div class="summary-label">Toplam</div><div class="summary-value">@Model.Results.Count</div></div></div>
+    <div class="col-6 col-md-3"><div class="summary-tile"><div class="summary-label">Başarılı</div><div class="summary-value text-success">@ok</div></div></div>
+    <div class="col-6 col-md-3"><div class="summary-tile"><div class="summary-label">Başarısız</div><div class="summary-value @(fail > 0 ? "text-danger" : "")">@fail</div></div></div>
+</div>
+
+<div class="card mb-3">
+    <div class="table-wrap">
+        <table class="table table-modern align-middle mb-0">
+            <thead><tr><th>@(isUser ? "Grup" : "Üst grup")</th><th>@(isUser ? "Kullanıcı" : "Alt grup")</th><th>İşlem</th><th>Sonuç</th><th>Mesaj</th></tr></thead>
+            <tbody>
+                @foreach (var r in Model.Results)
+                {
+                    <tr class="@(r.Success ? "" : "row-fail")">
+                        <td class="cell-title">@r.GroupName</td>
+                        <td>@r.MemberName</td>
+                        <td class="small">@MembershipOperations.Text(r.Operation)</td>
+                        <td><span class="status-pill @(r.Success ? "status-ok" : "status-fail")">@(r.Success ? "Başarılı" : "Başarısız")</span></td>
+                        <td class="small">@r.Message</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<a asp-controller="@Model.Controller" asp-action="@Model.UploadAction" class="btn btn-primary">Yeni üyelik işlemi</a>

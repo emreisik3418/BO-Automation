@@ -48,4 +48,13 @@ public interface IBoPrincipalGateway
 
     /// <summary>Kullanıcıyı siler ve silindiğini doğrular (DELETE /v1/users/{id}).</summary>
     Task DeleteUserAsync(int id, CancellationToken ct = default);
+
+    /// <summary>Adlarına (SI_NAME) göre gruplar.</summary>
+    Task<IReadOnlyList<GroupListItemDto>> GetGroupsByNamesAsync(IReadOnlyCollection<string> names, CancellationToken ct = default);
+
+    /// <summary>Gruba üye ekler: PUT /v1/usergroups/{id}/users|usergroups { "entries": [ { "id": "..." } ] }.</summary>
+    Task AddMemberAsync(int groupId, MemberType type, int memberId, CancellationToken ct = default);
+
+    /// <summary>Gruptan üye çıkarır: DELETE /v1/usergroups/{id}/users|usergroups (aynı gövde).</summary>
+    Task RemoveMemberAsync(int groupId, MemberType type, int memberId, CancellationToken ct = default);
 }
