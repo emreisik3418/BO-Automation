@@ -1,0 +1,137 @@
+@using BoAdmin.Web.Infrastructure
+@model UserActionPreviewViewModel
+@inject CurrentEnvironmentAccessor CurrentEnvironment
+@{
+    var p = Model.Preview;
+    var isDelete = p.Kind == UserActionKind.Delete;
+    ViewData["Title"] = isDelete ? "Silme Önizleme" : "Aktif / Pasif Önizleme";
+    ViewData["Subtitle"] = "Aşağıdaki kullanıcılar işlenecek. Kontrol edip onaylayın.";
+    var toProcess = p.Processable;
+    var skipped = p.Skipped;
+    var toDisable = toProcess.Count(i => i.Disable == true);
+    var toEnable = toProcess.Count(i => i.Disable == false);
+}
+
+<div class="row g-3 mb-3">
+    <div class="col-md-3"><div class="summary-tile"><div class="summary-label">Dosya</div><div class="text-truncate fw-semibold" title="@Model.FileName">@Model.FileName</div></div></div>
+    @if (isDelete)
+    {
+        <div class="col-6 col-md-3"><div class="summary-tile"><div class="summary-label">Silinecek</div><div class="summary-value text-danger">@toProcess.Count</div></div></div>
+    }
+    else
+    {
+        <div class="col-6 col-md-3"><div class="summary-tile"><div class="summary-label">Pasif / Aktif yapılacak</div><div class="summary-value">@toDisable / @toEnable</div></div></div>
+    }
+    <div class="col-6 col-md-3"><div class="summary-tile"><div class="summary-label">Atlanan</div><div class="summary-value">@skipped.Count</div></div></div>
+    <div class="col-6 col-md-3"><div class="summary-tile"><div class="summary-label">Hatalı / bulunamayan</div><div class="summary-value @(p.Problems.Count > 0 ? "text-danger" : "")">@p.Problems.Count</div></div></div>
+</div>
+
+@if (p.Problems.Count > 0)
+{
+    <div class="alert alert-warning">
+        <strong>@p.Problems.Count satır</strong> işleme alınmayacak.
+        <details class="mt-1">
+            <summary>Satırları göster</summary>
+            <ul class="mb-0 mt-2 small">
+                @foreach (var issue in p.Problems.Take(200))
+                {
+                    <li>Satır @(issue.RowNumber)@(issue.Value is null ? "" : $" ({issue.Value})"): @issue.Reason</li>
+                }
+            </ul>
+        </details>
+    </div>
+}
+
+@if (skipped.Count > 0)
+{
+    <div class="alert alert-light small">
+        <strong>@skipped.Count kullanıcı</strong> atlanacak.
+        <details class="mt-1">
+            <summary>Listeyi göster</summary>
+            <ul class="mb-0 mt-2">
+                @foreach (var item in skipped.Take(200))
+                {
+                    <li>@item.User.Name: @item.Reason</li>
+                }
+            </ul>
+        </details>
+    </div>
+}
+
+@if (toProcess.Count == 0)
+{
+    <div class="card">
+        <div class="empty-state">
+            <span class="empty-icon">@Icons.Get("user", 28)</span>
+            <div class="empty-title">İşlenecek kullanıcı yok</div>
+            <a asp-action="@(isDelete ? "Remove" : "Status")" class="btn btn-outline-secondary mt-2">Geri dön</a>
+        </div>
+    </div>
+}
+else
+{
+    <div class="card mb-4">
+        <div class="toolbar">
+            <span class="toolbar-title">@(isDelete ? "Silinecek kullanıcılar" : "Değişiklikler")</span>
+            <span class="toolbar-meta">@toProcess.Count kullanıcı</span>
+        </div>
+        <div class="table-wrap preview-table">
+            <table class="table table-modern align-middle">
+                <thead>
+                    <tr>
+                        <th>Hesap</th><th>Tam ad</th><th>Son giriş</th><th>Mevcut durum</th>
+                        @if (!isDelete) { <th></th><th>Yeni durum</th> }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in toProcess)
+                    {
+                        var u = item.User;
+                        <tr>
+                            <td class="cell-title">@u.Name</td>
+                            <td>@u.FullName</td>
+                            <td class="text-nowrap">@(u.LastLogon?.ToString("dd.MM.yyyy HH:mm") ?? "Hiç giriş yapmamış")</td>
+                            <td><span class="status-pill @(u.Disabled ? "status-fail" : "status-ok")">@(u.Disabled ? "Pasif" : "Aktif")</span></td>
+                            @if (!isDelete)
+                            {
+                                <td class="text-muted">@Icons.Get("arrow-right", 16)</td>
+                                <td><span class="status-pill @(item.Disable == true ? "status-fail" : "status-ok")">@(item.Disable == true ? "Pasif" : "Aktif")</span></td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <form method="post" asp-action="Execute" id="bulkForm" class="card card-body"
+          data-critical-env="@(CurrentEnvironment.IsCritical ? CurrentEnvironment.DisplayName : null)"
+          data-confirm-text="@(isDelete ? $"{toProcess.Count} kullanıcı kalıcı olarak silinecek." : $"{toProcess.Count} kullanıcının durumu değişecek.")">
+        <input type="hidden" name="Environment" value="@Model.EnvironmentKey" />
+        <input type="hidden" name="PreviewJobId" value="@Model.PreviewJobId" />
+        <input type="hidden" name="ConfirmationCount" value="@toProcess.Count" />
+
+        <div class="alert @(isDelete || CurrentEnvironment.IsCritical ? "alert-danger fw-semibold" : "alert-warning") small">
+            <strong>@CurrentEnvironment.DisplayName</strong> ortamında
+            @if (isDelete)
+            {
+                <text>@toProcess.Count kullanıcı <u>kalıcı olarak silinecek</u>. Bu işlem geri alınamaz.</text>
+            }
+            else
+            {
+                <text>@toDisable kullanıcı pasif, @toEnable kullanıcı aktif yapılacak.</text>
+            }
+        </div>
+
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn @(isDelete ? "btn-danger" : "btn-primary")" id="confirmBtn">
+                @(isDelete ? "Onayla: kullanıcıları sil" : "Onayla: durumları güncelle")
+            </button>
+            <a asp-action="@(isDelete ? "Remove" : "Status")" class="btn btn-outline-secondary">Vazgeç</a>
+        </div>
+    </form>
+}
+
+@section Scripts {
+    <script src="~/js/reports.js" asp-append-version="true"></script>
+}

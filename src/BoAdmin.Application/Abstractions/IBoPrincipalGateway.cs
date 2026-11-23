@@ -31,4 +31,21 @@ public interface IBoPrincipalGateway
 
     /// <summary>Grubun üyesi olduğu üst gruplar.</summary>
     Task<IReadOnlyList<GroupListItemDto>> GetParentGroupsAsync(int groupId, CancellationToken ct = default);
+
+    // ---------------- Değişiklik işlemleri ----------------
+
+    /// <summary>Hesap adlarına (SI_NAME) göre kullanıcılar.</summary>
+    Task<IReadOnlyList<UserListItemDto>> GetUsersByNamesAsync(IReadOnlyCollection<string> names, CancellationToken ct = default);
+
+    /// <summary>Kullanıcıları ID ile getirir.</summary>
+    Task<IReadOnlyList<UserListItemDto>> GetUsersByIdsAsync(IReadOnlyCollection<int> ids, CancellationToken ct = default);
+
+    /// <summary>Seçili ortamda BO'ya bağlanan servis hesabı (kendini pasif yapmasın / silmesin diye).</summary>
+    string? ServiceAccountName { get; }
+
+    /// <summary>Kullanıcıyı aktif/pasif yapar ve doğrular (GET + PUT /v1/users/{id}, "disabled" alanı).</summary>
+    Task SetUserDisabledAsync(int id, bool disabled, CancellationToken ct = default);
+
+    /// <summary>Kullanıcıyı siler ve silindiğini doğrular (DELETE /v1/users/{id}).</summary>
+    Task DeleteUserAsync(int id, CancellationToken ct = default);
 }

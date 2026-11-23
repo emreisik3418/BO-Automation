@@ -5,7 +5,9 @@ using BoAdmin.Application.Common;
 using BoAdmin.Application.Common.Exceptions;
 using BoAdmin.Application.Principals;
 using BoAdmin.Infrastructure.Bo.Models;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace BoAdmin.Infrastructure.Bo;
 
@@ -36,13 +38,17 @@ public sealed class BoPrincipalGateway : IBoPrincipalGateway
     private const int QueryPageSize = 500;
 
     private readonly BoRestClient _client;
+    private readonly IOptionsMonitor<BoOptions> _options;
     private readonly ILogger<BoPrincipalGateway> _logger;
 
-    public BoPrincipalGateway(BoRestClient client, ILogger<BoPrincipalGateway> logger)
+    public BoPrincipalGateway(BoRestClient client, IOptionsMonitor<BoOptions> options, ILogger<BoPrincipalGateway> logger)
     {
         _client = client;
+        _options = options;
         _logger = logger;
     }
+
+    public string? ServiceAccountName => _options.CurrentValue.Find(_client.EnvironmentKey)?.UserName;
 
     // ------------------------------------------------------------------
     // Kullanıcılar
@@ -250,6 +256,100 @@ public sealed class BoPrincipalGateway : IBoPrincipalGateway
                 break;
         }
     }
+
+    // ------------------------------------------------------------------
+    // Değişiklik işlemleri
+    // ------------------------------------------------------------------
+
+    public async Task<IReadOnlyList<UserListItemDto>> GetUsersByNamesAsync(IReadOnlyCollection<string> names, CancellationToken ct = default)
+    {
+        var list = new List<UserListItemDto>();
+        foreach (var chunk in names.Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).Chunk(InClauseChunkSize))
+        {
+            var query = $"SELECT {UserFields} FROM CI_SYSTEMOBJECTS WHERE {UserKind} AND {CmsQueryBuilder.InList("SI_NAME", chunk)}";
+            list.AddRange((await _client.CmsQueryAllAsync(query, InClauseChunkSize, ct: ct)).Select(MapUser));
+        }
+        return list;
+    }
+
+    public async Task<IReadOnlyList<UserListItemDto>> GetUsersByIdsAsync(IReadOnlyCollection<int> ids, CancellationToken ct = default)
+    {
+        var list = new List<UserListItemDto>();
+        foreach (var chunk in ids.Distinct().Chunk(InClauseChunkSize))
+        {
+            var query = $"SELECT {UserFields} FROM CI_SYSTEMOBJECTS WHERE {UserKind} AND {CmsQueryBuilder.InList("SI_ID", chunk)}";
+            list.AddRange((await _client.CmsQueryAllAsync(query, InClauseChunkSize, ct: ct)).Select(MapUser));
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// GET /v1/users/{id} -> "disabled" alanı değiştirilir -> aynı JSON PUT ile geri gönderilir -> tekrar okunup doğrulanır.
+    /// </summary>
+    public async Task SetUserDisabledAsync(int id, bool disabled, CancellationToken ct = default)
+    {
+        var path = $"v1/users/{Id(id)}";
+        var root = await GetObjectAsync(path, ct);
+
+        var (owner, key) = FindField(root, "disabled");
+        if (owner is null || key is null)
+            throw new BoOperationException("Kullanıcı bilgisinde 'disabled' alanı bulunamadı; durum değiştirilemedi.");
+
+        // Alan metin olarak geliyorsa metin, mantıksal geliyorsa mantıksal yazılır
+        owner[key] = owner[key] is JsonValue v && v.TryGetValue<string>(out _)
+            ? JsonValue.Create(disabled ? "true" : "false")
+            : JsonValue.Create(disabled);
+
+        await _client.PutJsonAsync(path, root, ct);
+
+        var after = await GetObjectAsync(path, ct);
+        var (afterOwner, afterKey) = FindField(after, "disabled");
+        var actual = afterOwner is not null && afterKey is not null && ReadBool(afterOwner[afterKey]);
+        if (actual != disabled)
+            throw new BoOperationException("Durum güncelleme isteği kabul edildi ama BO'daki değer değişmedi.");
+
+        _logger.LogInformation("Kullanıcı durumu güncellendi: {Id} disabled={Disabled}", id, disabled);
+    }
+
+    /// <summary>DELETE /v1/users/{id}, ardından CMS sorgusuyla silindiği doğrulanır.</summary>
+    public async Task DeleteUserAsync(int id, CancellationToken ct = default)
+    {
+        await _client.DeleteAsync($"v1/users/{Id(id)}", ct);
+
+        if (await GetUserAsync(id, ct) is not null)
+            throw new BoOperationException("Silme isteği kabul edildi ama kullanıcı BO'da hâlâ duruyor.");
+
+        _logger.LogInformation("Kullanıcı silindi: {Id}", id);
+    }
+
+    private async Task<JsonObject> GetObjectAsync(string path, CancellationToken ct)
+    {
+        var json = await _client.GetJsonAsync(path, ct);
+        return JsonNode.Parse(json.GetRawText()) as JsonObject
+               ?? throw new BoOperationException($"BO yanıtı okunamadı ({path}).");
+    }
+
+    /// <summary>Alanı kökte veya tek seviye iç nesnede (ör. "entry") arar; büyük/küçük harf duyarsız.</summary>
+    private static (JsonObject? Owner, string? Key) FindField(JsonObject root, string name)
+    {
+        foreach (var p in root)
+            if (string.Equals(p.Key, name, StringComparison.OrdinalIgnoreCase)) return (root, p.Key);
+
+        foreach (var p in root)
+            if (p.Value is JsonObject inner)
+                foreach (var q in inner)
+                    if (string.Equals(q.Key, name, StringComparison.OrdinalIgnoreCase)) return (inner, q.Key);
+
+        return (null, null);
+    }
+
+    private static bool ReadBool(JsonNode? node) => node switch
+    {
+        JsonValue v when v.TryGetValue<bool>(out var b) => b,
+        JsonValue v when v.TryGetValue<string>(out var s) => s.Equals("true", StringComparison.OrdinalIgnoreCase) || s == "1",
+        JsonValue v when v.TryGetValue<int>(out var n) => n != 0,
+        _ => false
+    };
 
     // ------------------------------------------------------------------
     // Eşleme

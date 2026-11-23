@@ -52,11 +52,13 @@ public sealed class ModuleRegistry
             }),
 
         new ModuleDescriptor(ModuleNames.Users, "Kullanıcı Yönetimi",
-            "BO kullanıcılarını arama, detay ve Excel'e aktarma",
+            "BO kullanıcılarını arama, toplu aktif/pasif yapma ve silme",
             "user", "Users", "Index", IsAvailable: true,
             new[]
             {
                 new ModuleNavItem("Kullanıcı Arama", "Index", "search", "Detail", "Export"),
+                new ModuleNavItem("Aktif / Pasif Yapma", "Status", "lock", "StatusPreview"),
+                new ModuleNavItem("Kullanıcı Silme", "Remove", "trash", "RemovePreview"),
             }),
 
         new ModuleDescriptor(ModuleNames.Groups, "Grup Yönetimi",

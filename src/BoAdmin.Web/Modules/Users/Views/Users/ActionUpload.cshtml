@@ -1,0 +1,67 @@
+@using BoAdmin.Web.Infrastructure
+@model UserActionUploadViewModel
+@{
+    var isDelete = Model.Kind == UserActionKind.Delete;
+    ViewData["Title"] = isDelete ? "Kullanıcı Silme" : "Aktif / Pasif Yapma";
+    ViewData["Subtitle"] = isDelete
+        ? "Dosyadaki kullanıcı hesaplarını önizleyip onaylayarak toplu silin."
+        : "Excel'deki listeyle kullanıcıları toplu aktif veya pasif yapın.";
+}
+
+<div class="row g-4">
+    <div class="col-xxl-7 col-xl-8">
+        @if (Model.ErrorMessage is not null)
+        {
+            <div class="alert alert-danger">@Model.ErrorMessage</div>
+        }
+
+        <form method="post" asp-action="@(isDelete ? "RemovePreview" : "StatusPreview")" enctype="multipart/form-data" class="card" data-busy-form>
+            <div class="card-body">
+                <label for="file" class="form-label">@(isDelete ? "Dosya (.xlsx, .txt veya .csv)" : "Excel dosyası (.xlsx)")</label>
+                <input type="file" class="form-control" id="file" name="file" required
+                       accept="@(isDelete ? ".xlsx,.xlsm,.txt,.csv" : ".xlsx,.xlsm")" />
+                <div class="form-text mb-3">
+                    @if (isDelete)
+                    {
+                        <text>Excel'de <strong>Hesap</strong> sütunu ya da metin dosyasında her satırda bir hesap. En fazla @Model.MaxCount kullanıcı.</text>
+                    }
+                    else
+                    {
+                        <text>İlk sayfa okunur: <strong>Hesap</strong> ve <strong>İşlem</strong> (Aktif / Pasif) sütunu. En fazla @Model.MaxCount kullanıcı.</text>
+                    }
+                </div>
+
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="submit" class="btn @(isDelete ? "btn-danger" : "btn-primary")" data-busy-text="Dosya yükleniyor...">@Icons.Get("upload", 16) Önizle</button>
+                    <a asp-action="Template" asp-route-kind="@Model.Kind" class="btn btn-outline-success">@Icons.Get("download", 16) Boş şablonu indir</a>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <div class="col-xxl-5 col-xl-4">
+        <div class="card">
+            <div class="card-header">Nasıl çalışır?</div>
+            <div class="card-body">
+                <ul class="small text-muted mb-0 ps-3">
+                    <li>Hesap adı CMC'deki <em>Account Name</em> ile aynı olmalı (büyük/küçük harf fark etmez).</li>
+                    @if (isDelete)
+                    {
+                        <li>Önizlemede silinecek kullanıcıları, son girişlerini ve durumlarını görürsünüz.</li>
+                        <li><strong>Silme geri alınamaz.</strong> Emin değilseniz önce pasif yapmayı tercih edin.</li>
+                    }
+                    else
+                    {
+                        <li>Zaten istenen durumda olan kullanıcılar atlanır.</li>
+                    }
+                    <li>Administrator, Guest gibi sistem hesapları ve uygulamanın BO servis hesabı hiçbir zaman işlenmez.</li>
+                    <li>Her işlem İşlem Geçmişi'ne kaydedilir.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/reports.js" asp-append-version="true"></script>
+}

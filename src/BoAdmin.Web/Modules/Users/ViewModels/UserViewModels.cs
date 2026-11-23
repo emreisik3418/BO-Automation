@@ -77,3 +77,35 @@ public sealed class UserDetailViewModel
     /// <summary>Kullanıcının Grup Yönetimi modülüne erişimi varsa grup adları detaya link olur.</summary>
     public bool CanViewGroups { get; set; }
 }
+
+// ----------------------------------------------------------------------
+// Toplu aktif/pasif ve silme
+// ----------------------------------------------------------------------
+
+public sealed class UserActionUploadViewModel
+{
+    public required UserActionKind Kind { get; init; }
+    public string? ErrorMessage { get; set; }
+    public int MaxCount => UserActionService.MaxBatchSize;
+}
+
+public sealed class UserActionPreviewViewModel
+{
+    public required UserActionPreviewDto Preview { get; init; }
+    public string? FileName { get; init; }
+    public required string EnvironmentKey { get; init; }
+    public Guid PreviewJobId { get; set; }
+}
+
+public sealed class UserActionExecuteModel
+{
+    public string Environment { get; set; } = string.Empty;
+    public Guid PreviewJobId { get; set; }
+    public int ConfirmationCount { get; set; }
+}
+
+public sealed class UserActionResultViewModel
+{
+    public required UserActionKind Kind { get; init; }
+    public required IReadOnlyList<UserActionResult> Results { get; init; }
+}
