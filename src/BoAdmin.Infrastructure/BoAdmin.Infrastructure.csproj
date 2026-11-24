@@ -8,10 +8,13 @@
   </PropertyGroup>
 
   <!--
-    Sbox (HsmService) WCF proxy'si WSDL'den üretilir ve repoya konmaz (tools\generate-sbox-proxy.bat).
+    Sbox (HsmService) WCF proxy'si WSDL'den üretilir ve repoya konmaz. İki yoldan biri:
+      - tools\generate-sbox-proxy.bat          -> Sbox\HsmServiceProxy.cs
+      - VS: Infrastructure projesine sağ tık > Add > Connected Service > WCF Web Service,
+            adı "Sbox", namespace "BoAdmin.Infrastructure.Sbox" -> Connected Services\Sbox\Reference.cs
     Dosya varsa SBOX_PROXY sembolü tanımlanır ve gerçek Sbox istemcisi derlenir.
   -->
-  <PropertyGroup Condition="Exists('Sbox\HsmServiceProxy.cs')">
+  <PropertyGroup Condition="Exists('Sbox\HsmServiceProxy.cs') Or Exists('Connected Services\Sbox\Reference.cs')">
     <DefineConstants>$(DefineConstants);SBOX_PROXY</DefineConstants>
   </PropertyGroup>
 
