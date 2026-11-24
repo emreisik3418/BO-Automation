@@ -15,6 +15,9 @@ public interface IBoCredentialProvider
 
     /// <summary>Bilinen BO kullanıcı adı (Sbox'tan daha önce alınmışsa o, yoksa appsettings).</summary>
     string? KnownUserName(string environment);
+
+    /// <summary>Bellek kullanmadan Sbox'tan (veya ayardan) okur; test ekranı için.</summary>
+    Task<BoCredential> GetFreshAsync(string environment, CancellationToken ct = default);
 }
 
 public sealed class BoCredentialProvider : IBoCredentialProvider
@@ -71,6 +74,12 @@ public sealed class BoCredentialProvider : IBoCredentialProvider
         {
             gate.Release();
         }
+    }
+
+    public Task<BoCredential> GetFreshAsync(string environment, CancellationToken ct = default)
+    {
+        Invalidate(environment);
+        return GetAsync(environment, ct);
     }
 
     public void Invalidate(string environment)

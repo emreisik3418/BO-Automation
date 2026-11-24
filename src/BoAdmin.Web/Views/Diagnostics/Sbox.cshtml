@@ -1,0 +1,74 @@
+@using BoAdmin.Web.Infrastructure
+@using BoAdmin.Infrastructure.Bo.Credentials
+@model List<BoAdmin.Web.Controllers.DiagnosticsController.EnvRow>
+@{
+    ViewData["Title"] = "Sbox Bağlantı Testi";
+    ViewData["Subtitle"] = "Her ortamın BO kullanıcısını nereden aldığını görün ve bağlantıyı test edin.";
+    var result = ViewData["Result"] as BoAdmin.Web.Controllers.DiagnosticsController.TestResult;
+}
+
+<div class="alert @(SboxClient.IsAvailable ? "alert-success" : "alert-danger") small">
+    @if (SboxClient.IsAvailable)
+    {
+        <text><strong>Sbox desteği derlemede var.</strong> Servis sınıfları (Reference.cs) uygulamaya girmiş.</text>
+    }
+    else
+    {
+        <text><strong>Sbox desteği derlemede yok.</strong> Reference.cs <code>BoAdmin.Infrastructure\Connected Services\Sbox</code> altında değil
+        ya da <code>BoAdmin.Infrastructure.csproj</code> güncel değil. Sbox kullanan ortamlar bağlanamaz.</text>
+    }
+</div>
+
+@if (result is not null)
+{
+    <div class="alert @(result.Success ? "alert-success" : "alert-danger")">
+        <div class="fw-semibold">@result.Environment: @result.Step</div>
+        <div>@result.Message</div>
+        @if (result.UserName is not null)
+        {
+            <div class="small mt-1">Kullanıcı: <span class="mono">@result.UserName</span> · Kaynak: @result.Source</div>
+        }
+    </div>
+}
+
+<div class="card">
+    <div class="table-wrap">
+        <table class="table table-modern align-middle mb-0">
+            <thead><tr><th>Ortam</th><th>Kimlik kaynağı</th><th>Sbox kaydı</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var r in Model)
+                {
+                    <tr>
+                        <td class="cell-title">@r.DisplayName <span class="cell-sub">(@r.Key)</span></td>
+                        <td>
+                            @if (r.UsesSbox)
+                            {
+                                <span class="status-pill status-ok">Sbox</span>
+                            }
+                            else
+                            {
+                                <span class="status-pill">appsettings / User Secrets</span>
+                            }
+                        </td>
+                        <td class="small mono">@(r.Target ?? "—")</td>
+                        <td class="text-end">
+                            <form method="post" asp-action="SboxTest" class="d-inline" data-busy-form>
+                                <input type="hidden" name="environment" value="@r.Key" />
+                                <button type="submit" class="btn btn-outline-primary btn-sm" data-busy-text="Test ediliyor...">Test et</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<p class="small text-muted mt-3 mb-0">
+    "Kimlik kaynağı" Sbox görünmüyorsa o ortamın <code>appsettings.json</code> içindeki <code>"Sbox"</code> bölümü okunmuyor:
+    bölüm ortamın içinde olmalı ve <code>SensitiveDataName</code> dolu olmalı.
+</p>
+
+@section Scripts {
+    <script src="~/js/reports.js" asp-append-version="true"></script>
+}

@@ -23,6 +23,9 @@ public interface IBoSessionService
     void Invalidate(string environment, string token);
 
     Task LogoffAllAsync(CancellationToken ct = default);
+
+    /// <summary>Ortamın açık oturumunu kapatır; bir sonraki istekte yeniden logon olunur.</summary>
+    Task ResetAsync(string environment, CancellationToken ct = default);
 }
 
 public sealed class BoSessionService : IBoSessionService, IDisposable
@@ -110,6 +113,16 @@ public sealed class BoSessionService : IBoSessionService, IDisposable
     public async Task LogoffAllAsync(CancellationToken ct = default)
     {
         foreach (var (environment, slot) in _slots)
+        {
+            var state = Interlocked.Exchange(ref slot.State, null);
+            if (state is not null)
+                await LogoffTokenSafeAsync(environment, state.Token, ct);
+        }
+    }
+
+    public async Task ResetAsync(string environment, CancellationToken ct = default)
+    {
+        if (_slots.TryGetValue(environment, out var slot))
         {
             var state = Interlocked.Exchange(ref slot.State, null);
             if (state is not null)

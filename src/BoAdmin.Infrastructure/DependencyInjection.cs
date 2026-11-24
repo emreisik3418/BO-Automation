@@ -90,6 +90,17 @@ public static class DependencyInjection
                 audit.AuditDirectory);
         }
 
+        // Sbox durumu: hangi ortam şifresini nereden alıyor
+        var bo = services.GetRequiredService<IOptions<BoOptions>>().Value;
+        logger.LogInformation("Sbox desteği derlemede: {Available}. Sbox adresi: {Endpoint}",
+            SboxClient.IsAvailable ? "VAR" : "YOK (Reference.cs derlemeye girmedi)",
+            string.IsNullOrWhiteSpace(bo.Sbox.Endpoint) ? "(boş)" : bo.Sbox.Endpoint);
+        foreach (var (key, env) in bo.Ordered)
+        {
+            logger.LogInformation("Ortam {Environment}: kimlik kaynağı {Source}", key,
+                env.UsesSbox ? $"Sbox ({env.Sbox})" : "appsettings / User Secrets (Sbox bölümü yok veya SensitiveDataName boş)");
+        }
+
         return Task.CompletedTask;
     }
 

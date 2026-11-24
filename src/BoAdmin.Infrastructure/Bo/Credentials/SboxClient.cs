@@ -21,6 +21,13 @@ public sealed class SboxClient : ISboxClient
 
     public SboxClient(ILogger<SboxClient> logger) => _logger = logger;
 
+    /// <summary>Proxy (Reference.cs / HsmServiceProxy.cs) derlemeye girdi mi?</summary>
+#if SBOX_PROXY
+    public static bool IsAvailable => true;
+#else
+    public static bool IsAvailable => false;
+#endif
+
 #if SBOX_PROXY
     public async Task<BoCredential> GetAsync(SboxOptions service, SboxTargetOptions target, CancellationToken ct = default)
     {
