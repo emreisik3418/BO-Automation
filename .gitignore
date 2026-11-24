@@ -29,3 +29,6 @@ secrets.json
 # Sbox WCF proxy'si WSDL'den üretilir (tools/generate-sbox-proxy.bat), repoya konmaz
 src/BoAdmin.Infrastructure/Sbox/
 src/BoAdmin.Infrastructure/Connected Services/
+
+# Uygulama kullanıcı yetkileri (geliştirme)
+src/BoAdmin.Web/data/
