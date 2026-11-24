@@ -1,0 +1,91 @@
+@using BoAdmin.Web.Infrastructure
+@model AccessIndexViewModel
+@{
+    ViewData["Title"] = "Uygulama Kullanıcıları";
+    ViewData["Subtitle"] = "Uygulamaya girebilecek kullanıcıları ve her ortamda görebilecekleri sayfaları yönetin.";
+}
+
+<div class="d-flex flex-wrap gap-2 mb-3">
+    <a asp-action="Edit" class="btn btn-primary">@Icons.Get("user", 16) Kullanıcı ekle</a>
+    <span class="ms-auto small text-muted align-self-center">@Model.Users.Count kullanıcı</span>
+</div>
+
+<div class="card mb-4">
+    @if (Model.Users.Count == 0)
+    {
+        <div class="empty-state">
+            <span class="empty-icon">@Icons.Get("users", 28)</span>
+            <div class="empty-title">Henüz kullanıcı eklenmemiş</div>
+            <p class="empty-text">Şu an uygulamaya yalnızca yöneticiler girebilir. <strong>Kullanıcı ekle</strong> ile başlayın.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table table-hover table-modern align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Sicil</th>
+                        <th>Ad</th>
+                        <th>Durum</th>
+                        @foreach (var env in Model.Environments)
+                        {
+                            <th class="text-center">@env.DisplayName</th>
+                        }
+                        <th>Son değişiklik</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var u in Model.Users)
+                    {
+                        <tr class="@(u.IsActive ? "" : "text-muted")">
+                            <td class="cell-title mono">@u.Sicil</td>
+                            <td>
+                                @u.DisplayName
+                                @if (u.Note is not null)
+                                {
+                                    <div class="cell-sub">@u.Note</div>
+                                }
+                            </td>
+                            <td><span class="status-pill @(u.IsActive ? "status-ok" : "status-fail")">@(u.IsActive ? "Aktif" : "Pasif")</span></td>
+                            @foreach (var env in Model.Environments)
+                            {
+                                var count = u.Permissions.TryGetValue(env.Key, out var pages) ? pages.Count : 0;
+                                <td class="text-center">
+                                    @if (count == 0)
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge text-bg-@env.Color" title="@string.Join(", ", pages!)">@(count == Model.PageCount ? "Tümü" : $"{count} sayfa")</span>
+                                    }
+                                </td>
+                            }
+                            <td class="small text-nowrap">@((u.UpdatedAt ?? u.CreatedAt)?.ToString("dd.MM.yyyy HH:mm")) <div class="cell-sub">@(u.UpdatedBy ?? u.CreatedBy)</div></td>
+                            <td class="text-end text-nowrap">
+                                <a asp-action="Edit" asp-route-sicil="@u.Sicil" class="btn btn-outline-secondary btn-sm" title="Düzenle">@Icons.Get("edit", 15)</a>
+                                <a asp-action="Edit" asp-route-copyFrom="@u.Sicil" class="btn btn-outline-secondary btn-sm" title="Bu yetkilerle yeni kullanıcı">@Icons.Get("copy", 15)</a>
+                                <form method="post" asp-action="Delete" class="d-inline" onsubmit="return confirm('@u.Sicil uygulamadan çıkarılsın mı?');">
+                                    <input type="hidden" name="sicil" value="@u.Sicil" />
+                                    <button type="submit" class="btn btn-outline-danger btn-sm" title="Sil">@Icons.Get("trash", 15)</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<div class="card">
+    <div class="card-header">Yöneticiler (appsettings)</div>
+    <div class="card-body small">
+        <p class="mb-2 text-muted">Yöneticiler tüm ortamlarda tüm sayfalara erişir ve bu ekranı görür. <code>appsettings.json</code> &gt; <code>AccessControl:Admins</code> altından değiştirilir.</p>
+        <div><strong>Siciller:</strong> @(Model.AdminUsers.Count == 0 ? "—" : string.Join(", ", Model.AdminUsers))</div>
+        <div><strong>AD grupları:</strong> @(Model.AdminGroups.Count == 0 ? "—" : string.Join(", ", Model.AdminGroups))</div>
+        <div class="text-muted mt-2">Kullanıcı dosyası: <span class="mono">@Model.FilePath</span></div>
+    </div>
+</div>

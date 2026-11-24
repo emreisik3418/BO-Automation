@@ -1,72 +1,89 @@
 using System.Security.Claims;
 using BoAdmin.Web.Infrastructure;
+using BoAdmin.Web.Infrastructure.AppUsers;
+using BoAdmin.Web.Modules;
 using Microsoft.Extensions.Options;
 
 namespace BoAdmin.Web.Authorization;
 
 /// <summary>
-/// Kullanıcının hangi ortamda hangi modüllere erişebildiğini hesaplar.
-/// Hem authorization handler hem de menü/sekme/ortam seçici bu servisi kullanır,
-/// böylece "menüde görünen" ile "erişilebilen" her zaman aynıdır.
+/// Kullanıcının hangi ortamda hangi sayfalara erişebildiğini hesaplar.
+///  - Yöneticiler (appsettings AccessControl:Admins): tüm ortamlar, tüm sayfalar + kullanıcı yönetimi
+///  - Diğerleri: "Uygulama Kullanıcıları" ekranında atanan ortam × sayfa yetkileri
+/// Menü, ortam seçici, policy'ler ve sayfa filtresi bu servisi kullandığı için
+/// "menüde görünen" ile "erişilebilen" her zaman aynıdır.
 /// </summary>
 public interface IModuleAccessService
 {
+    bool IsAdmin(ClaimsPrincipal user);
+
+    /// <summary>Modül erişimi: seçili ortamda modülün en az bir sayfasına yetki.</summary>
     bool HasAccess(ClaimsPrincipal user, string environment, string moduleName);
+
+    bool HasPageAccess(ClaimsPrincipal user, string environment, string pageKey);
 
     IReadOnlyList<string> GetAccessibleModules(ClaimsPrincipal user, string environment);
 
-    /// <summary>En az bir modüle erişimi olan ortamlar (menüdeki sırayla).</summary>
+    /// <summary>En az bir sayfaya erişimi olan ortamlar (menüdeki sırayla).</summary>
     IReadOnlyList<EnvironmentInfo> GetAccessibleEnvironments(ClaimsPrincipal user);
 }
 
 public sealed class ModuleAccessService : IModuleAccessService
 {
-    private readonly IOptionsMonitor<ModuleAuthorizationOptions> _options;
+    private readonly IOptionsMonitor<AccessControlOptions> _options;
+    private readonly AppUserStore _store;
+    private readonly ModuleRegistry _registry;
     private readonly EnvironmentCatalog _catalog;
     private readonly ILogger<ModuleAccessService> _logger;
 
     public ModuleAccessService(
-        IOptionsMonitor<ModuleAuthorizationOptions> options,
+        IOptionsMonitor<AccessControlOptions> options,
+        AppUserStore store,
+        ModuleRegistry registry,
         EnvironmentCatalog catalog,
         ILogger<ModuleAccessService> logger)
     {
         _options = options;
+        _store = store;
+        _registry = registry;
         _catalog = catalog;
         _logger = logger;
     }
 
+    public bool IsAdmin(ClaimsPrincipal user)
+    {
+        if (user.Identity?.IsAuthenticated != true) return false;
+        var admins = _options.CurrentValue.Admins;
+        var identityName = user.Identity?.Name ?? string.Empty;
+        return IsUserListed(identityName, admins.Users) || FindMatchingGroup(user, identityName, admins.Groups) is not null;
+    }
+
     public bool HasAccess(ClaimsPrincipal user, string environment, string moduleName)
     {
-        if (user.Identity?.IsAuthenticated != true || string.IsNullOrEmpty(environment)) return false;
+        if (user.Identity?.IsAuthenticated != true) return false;
 
+        if (string.Equals(moduleName, ModuleNames.Admin, StringComparison.OrdinalIgnoreCase))
+            return IsAdmin(user);
+
+        if (string.IsNullOrEmpty(environment)) return false;
+        if (IsAdmin(user)) return true;
+
+        var appUser = FindAppUser(user);
+        if (appUser is null || !appUser.IsActive) return false;
+
+        var pages = appUser.PagesIn(environment);
         if (string.Equals(moduleName, ModuleNames.AnyModule, StringComparison.OrdinalIgnoreCase))
-            return ModuleNames.All.Any(m => HasAccess(user, environment, m));
+            return pages.Count > 0;
 
-        var rule = _options.CurrentValue.GetRule(environment, moduleName);
-        if (rule is null)
-        {
-            _logger.LogDebug("{Environment}/{Module} için yetki tanımı yok, erişim reddedildi.", environment, moduleName);
-            return false;
-        }
+        var module = _registry.Find(moduleName);
+        return module is not null && module.Items.Any(i => pages.Contains(ModuleRegistry.PageKey(module, i), StringComparer.OrdinalIgnoreCase));
+    }
 
-        var identityName = user.Identity?.Name ?? string.Empty;
-
-        // 1) Sicil kontrolü
-        if (IsUserAllowed(identityName, rule.AllowedUsers))
-        {
-            _logger.LogDebug("{User} -> {Environment}/{Module}: sicil listesi ile yetkili.", identityName, environment, moduleName);
-            return true;
-        }
-
-        // 2) AD grup kontrolü
-        var matchedGroup = FindMatchingGroup(user, identityName, rule.AllowedGroups);
-        if (matchedGroup is not null)
-        {
-            _logger.LogDebug("{User} -> {Environment}/{Module}: '{Group}' grubu ile yetkili.", identityName, environment, moduleName, matchedGroup);
-            return true;
-        }
-
-        return false;
+    public bool HasPageAccess(ClaimsPrincipal user, string environment, string pageKey)
+    {
+        if (user.Identity?.IsAuthenticated != true || string.IsNullOrEmpty(environment)) return false;
+        if (IsAdmin(user)) return true;
+        return FindAppUser(user)?.HasPage(environment, pageKey) == true;
     }
 
     public IReadOnlyList<string> GetAccessibleModules(ClaimsPrincipal user, string environment) =>
@@ -75,11 +92,15 @@ public sealed class ModuleAccessService : IModuleAccessService
     public IReadOnlyList<EnvironmentInfo> GetAccessibleEnvironments(ClaimsPrincipal user) =>
         _catalog.All.Where(e => HasAccess(user, e.Key, ModuleNames.AnyModule)).ToList();
 
-    private static bool IsUserAllowed(string identityName, IEnumerable<string> allowedUsers)
+    // ------------------------------------------------------------------
+
+    private AppUser? FindAppUser(ClaimsPrincipal user) =>
+        _store.Find(AccountNameHelper.GetSamAccountName(user.Identity?.Name));
+
+    private static bool IsUserListed(string identityName, IEnumerable<string> users)
     {
         var sam = AccountNameHelper.GetSamAccountName(identityName);
-
-        foreach (var entry in allowedUsers)
+        foreach (var entry in users)
         {
             if (string.IsNullOrWhiteSpace(entry)) continue;
             var value = entry.Trim();
@@ -88,23 +109,18 @@ public sealed class ModuleAccessService : IModuleAccessService
             var matches = value.Contains('\\')
                 ? string.Equals(value, identityName, StringComparison.OrdinalIgnoreCase)
                 : string.Equals(value, sam, StringComparison.OrdinalIgnoreCase);
-
             if (matches) return true;
         }
-
         return false;
     }
 
-    private string? FindMatchingGroup(ClaimsPrincipal user, string identityName, IEnumerable<string> allowedGroups)
+    private string? FindMatchingGroup(ClaimsPrincipal user, string identityName, IEnumerable<string> groups)
     {
         var userDomain = AccountNameHelper.GetDomain(identityName);
-
-        foreach (var entry in allowedGroups)
+        foreach (var entry in groups)
         {
             if (string.IsNullOrWhiteSpace(entry)) continue;
             var group = entry.Trim();
-
-            // Domain yazılmamışsa kullanıcının domain'ini ekle: "BO_Admins" -> "DOMAIN\BO_Admins"
             if (!group.Contains('\\') && userDomain.Length > 0)
                 group = $"{userDomain}\\{group}";
 
@@ -115,11 +131,9 @@ public sealed class ModuleAccessService : IModuleAccessService
             }
             catch (Exception ex)
             {
-                // Grup adı AD'de çözümlenemezse (yazım hatası vb.) diğer gruplara devam et
                 _logger.LogWarning(ex, "AD grubu kontrol edilemedi: {Group}", group);
             }
         }
-
         return null;
     }
 }

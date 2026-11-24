@@ -15,7 +15,7 @@
     @foreach (var m in Model.Modules)
     {
         <div class="nav-group @(m.IsActive ? "open" : "")">
-            <a class="nav-link-app @(m.IsActive ? "active" : "")" asp-controller="@m.Module.Controller" asp-action="@m.Module.Action">
+            <a class="nav-link-app @(m.IsActive ? "active" : "")" asp-controller="@m.Module.Controller" asp-action="@(m.Items.FirstOrDefault()?.Item.Action ?? m.Module.Action)">
                 @Icons.Get(m.Module.Icon)
                 <span>@m.Module.Title</span>
             </a>
@@ -32,6 +32,19 @@
                 </div>
             }
         </div>
+    }
+
+    @if (Model.IsAdmin)
+    {
+        <div class="sidebar-section">Yönetim</div>
+        <a class="nav-link-app @(Model.AdminActive ? "active" : "")" asp-controller="Access" asp-action="Index">
+            @Icons.Get("shield")
+            <span>Uygulama Kullanıcıları</span>
+        </a>
+        <a class="nav-link-app" asp-controller="Diagnostics" asp-action="Sbox">
+            @Icons.Get("server")
+            <span>Sbox Testi</span>
+        </a>
     }
 
     @if (Model.ComingSoon.Count > 0)

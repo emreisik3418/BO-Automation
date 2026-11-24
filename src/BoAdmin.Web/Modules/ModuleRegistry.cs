@@ -31,8 +31,8 @@ public sealed record ModuleDescriptor(
 /// Uygulamadaki tüm modüller. Yeni modül eklemek için:
 ///  1) ModuleNames'e sabit ekle
 ///  2) Buraya satır ekle (IsAvailable: true) ve alt sayfalarını yaz
-///  3) appsettings "SapBo:Environments:{ORTAM}:Authorization" altına kural ekle
-///  4) Modules/{Modül}/ altına Controller + Views
+///  3) Modules/{Modül}/ altına Controller + Views
+///  4) Yeni sayfalar "Uygulama Kullanıcıları" ekranında otomatik listelenir
 /// </summary>
 public sealed class ModuleRegistry
 {
@@ -48,7 +48,7 @@ public sealed class ModuleRegistry
                 new ModuleNavItem("Rapor Adı Güncelleme", "Rename", "edit", "RenamePreview", "RenameExecute"),
                 new ModuleNavItem("Keyword Güncelleme", "Keywords", "tag", "KeywordsPreview", "KeywordsExecute"),
                 new ModuleNavItem("Açıklama Güncelleme", "Descriptions", "text", "DescriptionsPreview", "DescriptionsExecute"),
-                new ModuleNavItem("İşlem Geçmişi", "History", "clock"),
+                new ModuleNavItem("İşlem Geçmişi", "History", "clock", "ExportHistory"),
             }),
 
         new ModuleDescriptor(ModuleNames.Users, "Kullanıcı Yönetimi",
@@ -72,6 +72,21 @@ public sealed class ModuleRegistry
                 new ModuleNavItem("Üyelik Raporu", "Membership", "sheet", "MembershipReport", "MembershipReady"),
             }),
     };
+
+    /// <summary>Yetki anahtarı: "Reports.Index", "Users.Remove" ...</summary>
+    public static string PageKey(ModuleDescriptor module, ModuleNavItem item) => $"{module.Controller}.{item.Action}";
+
+    /// <summary>Yetkilendirilebilir tüm sayfalar (yalnızca hazır modüller).</summary>
+    public IEnumerable<(ModuleDescriptor Module, ModuleNavItem Item, string Key)> Pages =>
+        All.Where(m => m.IsAvailable).SelectMany(m => m.Items.Select(i => (m, i, PageKey(m, i))));
+
+    /// <summary>Controller + action hangi sayfaya ait? (önizleme / onay action'ları da ActiveFor ile eşlenir)</summary>
+    public string? FindPageKey(string? controller, string? action)
+    {
+        var module = FindByController(controller);
+        var item = module?.Items.FirstOrDefault(i => i.IsActiveFor(action));
+        return module is null || item is null ? null : PageKey(module, item);
+    }
 
     public ModuleDescriptor? Find(string name) =>
         All.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase));

@@ -70,76 +70,97 @@
         <div class="row g-3">
             @if (Model.HasReports)
             {
-                <div class="col-md-6">
-                    <a class="action-card" asp-controller="Reports" asp-action="Index">
-                        <span class="stat-icon tone-brand">@Icons.Get("search")</span>
-                        <span>
-                            <span class="action-title d-block">Rapor ara</span>
-                            <span class="action-text d-block">Ad, klasör, sahip, tip ve tarihe göre filtreleyin; tekli veya çoklu silin.</span>
-                        </span>
-                        @Icons.Get("arrow-right", 18, "action-arrow")
-                    </a>
-                </div>
-                <div class="col-md-6">
-                    <a class="action-card" asp-controller="Reports" asp-action="Bulk">
-                        <span class="stat-icon tone-sky">@Icons.Get("layers")</span>
-                        <span>
-                            <span class="action-title d-block">Rapor silme</span>
-                            <span class="action-text d-block">CUID listesi yükleyin; raporlar yedeklenip silinsin.</span>
-                        </span>
-                        @Icons.Get("arrow-right", 18, "action-arrow")
-                    </a>
-                </div>
-                <div class="col-md-6">
-                    <a class="action-card" asp-controller="Reports" asp-action="Rename">
-                        <span class="stat-icon tone-brand">@Icons.Get("edit")</span>
-                        <span>
-                            <span class="action-title d-block">Rapor adı güncelleme</span>
-                            <span class="action-text d-block">Excel'deki CUID ve yeni ad listesiyle raporları toplu yeniden adlandırın.</span>
-                        </span>
-                        @Icons.Get("arrow-right", 18, "action-arrow")
-                    </a>
-                </div>
-                <div class="col-md-6">
-                    <a class="action-card" asp-controller="Reports" asp-action="Keywords">
-                        <span class="stat-icon tone-success">@Icons.Get("tag")</span>
-                        <span>
-                            <span class="action-title d-block">Keyword güncelleme</span>
-                            <span class="action-text d-block">Excel'deki CUID listesiyle raporlara keyword ekleyin veya keyword'leri değiştirin.</span>
-                        </span>
-                        @Icons.Get("arrow-right", 18, "action-arrow")
-                    </a>
-                </div>
-                <div class="col-md-6">
-                    <a class="action-card" asp-controller="Reports" asp-action="Descriptions">
-                        <span class="stat-icon tone-brand">@Icons.Get("text")</span>
-                        <span>
-                            <span class="action-title d-block">Açıklama güncelleme</span>
-                            <span class="action-text d-block">Excel'deki CUID ve yeni açıklama listesiyle rapor açıklamalarını toplu güncelleyin.</span>
-                        </span>
-                        @Icons.Get("arrow-right", 18, "action-arrow")
-                    </a>
-                </div>
-                <div class="col-md-6">
-                    <a class="action-card" asp-controller="Reports" asp-action="Index" asp-all-route-data="@ReportSearchViewModel.QuickFilter(lastDays: 7)">
-                        <span class="stat-icon tone-success">@Icons.Get("calendar")</span>
-                        <span>
-                            <span class="action-title d-block">Son 7 günde değişenler</span>
-                            <span class="action-text d-block">Yakın zamanda güncellenen raporlara tek tıkla bakın.</span>
-                        </span>
-                        @Icons.Get("arrow-right", 18, "action-arrow")
-                    </a>
-                </div>
-                <div class="col-md-6">
-                    <a class="action-card" asp-controller="Reports" asp-action="History">
-                        <span class="stat-icon tone-muted">@Icons.Get("clock")</span>
-                        <span>
-                            <span class="action-title d-block">İşlem geçmişi</span>
-                            <span class="action-text d-block">Kim, ne zaman, hangi raporu sildi; Excel'e aktarın.</span>
-                        </span>
-                        @Icons.Get("arrow-right", 18, "action-arrow")
-                    </a>
-                </div>
+                if (Model.CanSee("Reports.Index"))
+                {
+                    <div class="col-md-6">
+                        <a class="action-card" asp-controller="Reports" asp-action="Index">
+                            <span class="stat-icon tone-brand">@Icons.Get("search")</span>
+                            <span>
+                                <span class="action-title d-block">Rapor ara</span>
+                                <span class="action-text d-block">Ad, klasör, sahip, tip ve tarihe göre filtreleyin; tekli veya çoklu silin.</span>
+                            </span>
+                            @Icons.Get("arrow-right", 18, "action-arrow")
+                        </a>
+                    </div>
+                }
+                if (Model.CanSee("Reports.Bulk"))
+                {
+                    <div class="col-md-6">
+                        <a class="action-card" asp-controller="Reports" asp-action="Bulk">
+                            <span class="stat-icon tone-sky">@Icons.Get("layers")</span>
+                            <span>
+                                <span class="action-title d-block">Rapor silme</span>
+                                <span class="action-text d-block">CUID listesi yükleyin; raporlar yedeklenip silinsin.</span>
+                            </span>
+                            @Icons.Get("arrow-right", 18, "action-arrow")
+                        </a>
+                    </div>
+                }
+                if (Model.CanSee("Reports.Rename"))
+                {
+                    <div class="col-md-6">
+                        <a class="action-card" asp-controller="Reports" asp-action="Rename">
+                            <span class="stat-icon tone-brand">@Icons.Get("edit")</span>
+                            <span>
+                                <span class="action-title d-block">Rapor adı güncelleme</span>
+                                <span class="action-text d-block">Excel'deki CUID ve yeni ad listesiyle raporları toplu yeniden adlandırın.</span>
+                            </span>
+                            @Icons.Get("arrow-right", 18, "action-arrow")
+                        </a>
+                    </div>
+                }
+                if (Model.CanSee("Reports.Keywords"))
+                {
+                    <div class="col-md-6">
+                        <a class="action-card" asp-controller="Reports" asp-action="Keywords">
+                            <span class="stat-icon tone-success">@Icons.Get("tag")</span>
+                            <span>
+                                <span class="action-title d-block">Keyword güncelleme</span>
+                                <span class="action-text d-block">Excel'deki CUID listesiyle raporlara keyword ekleyin veya keyword'leri değiştirin.</span>
+                            </span>
+                            @Icons.Get("arrow-right", 18, "action-arrow")
+                        </a>
+                    </div>
+                }
+                if (Model.CanSee("Reports.Descriptions"))
+                {
+                    <div class="col-md-6">
+                        <a class="action-card" asp-controller="Reports" asp-action="Descriptions">
+                            <span class="stat-icon tone-brand">@Icons.Get("text")</span>
+                            <span>
+                                <span class="action-title d-block">Açıklama güncelleme</span>
+                                <span class="action-text d-block">Excel'deki CUID ve yeni açıklama listesiyle rapor açıklamalarını toplu güncelleyin.</span>
+                            </span>
+                            @Icons.Get("arrow-right", 18, "action-arrow")
+                        </a>
+                    </div>
+                }
+                if (Model.CanSee("Reports.Index"))
+                {
+                    <div class="col-md-6">
+                        <a class="action-card" asp-controller="Reports" asp-action="Index" asp-all-route-data="@ReportSearchViewModel.QuickFilter(lastDays: 7)">
+                            <span class="stat-icon tone-success">@Icons.Get("calendar")</span>
+                            <span>
+                                <span class="action-title d-block">Son 7 günde değişenler</span>
+                                <span class="action-text d-block">Yakın zamanda güncellenen raporlara tek tıkla bakın.</span>
+                            </span>
+                            @Icons.Get("arrow-right", 18, "action-arrow")
+                        </a>
+                    </div>
+                }
+                if (Model.CanSee("Reports.History"))
+                {
+                    <div class="col-md-6">
+                        <a class="action-card" asp-controller="Reports" asp-action="History">
+                            <span class="stat-icon tone-muted">@Icons.Get("clock")</span>
+                            <span>
+                                <span class="action-title d-block">İşlem geçmişi</span>
+                                <span class="action-text d-block">Kim, ne zaman, hangi raporu sildi; Excel'e aktarın.</span>
+                            </span>
+                            @Icons.Get("arrow-right", 18, "action-arrow")
+                        </a>
+                    </div>
+                }
             }
 
             @foreach (var m in Model.ComingSoon)

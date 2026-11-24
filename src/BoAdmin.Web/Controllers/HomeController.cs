@@ -83,6 +83,7 @@ public sealed class HomeController : Controller
             Modules = modules,
             ComingSoon = _registry.All.Where(m => !m.IsAvailable).ToList(),
             HasReports = hasReports,
+            CanSee = page => _accessService.HasPageAccess(User, env.Key, page),
             Stats = stats,
             RecentActivity = recent
         });

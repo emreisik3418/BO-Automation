@@ -13,7 +13,7 @@ namespace BoAdmin.Web.Controllers;
 /// Her ortamın kimlik bilgisini nereden aldığını gösterir; "Test et" Sbox'tan bilgiyi yeniden alır
 /// ve o bilgiyle BO'ya yeni oturum açar. Şifre hiçbir zaman ekrana yazılmaz.
 /// </summary>
-[Authorize(Policy = ModuleNames.AnyModule)]
+[Authorize(Policy = ModuleNames.Admin)]
 public sealed class DiagnosticsController : Controller
 {
     private readonly IOptionsMonitor<BoOptions> _options;

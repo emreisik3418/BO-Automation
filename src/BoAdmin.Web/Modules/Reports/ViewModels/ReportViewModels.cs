@@ -325,6 +325,9 @@ public static class OperationNames
         nameof(ReportOperation.Keywords) => "Keyword güncelleme",
         nameof(ReportOperation.Description) => "Açıklama güncelleme",
         "BackupMove" => "Toplu yedekleme (TXT, taşıma)", // eski kayıtlar
+        "AccessUserAdd" => "Uygulama kullanıcısı ekleme",
+        "AccessUserUpdate" => "Uygulama kullanıcısı güncelleme",
+        "AccessUserRemove" => "Uygulama kullanıcısı silme",
         BoAdmin.Application.Principals.UserOperations.Enable or BoAdmin.Application.Principals.UserOperations.Disable
             or BoAdmin.Application.Principals.UserOperations.Delete => BoAdmin.Application.Principals.UserOperations.Text(operation!),
         _ when BoAdmin.Application.Principals.MembershipOperations.IsKnown(operation)

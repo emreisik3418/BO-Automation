@@ -12,7 +12,9 @@ public sealed record SidebarModule(ModuleDescriptor Module, bool IsActive, IRead
 public sealed record SidebarModel(
     bool HomeActive,
     IReadOnlyList<SidebarModule> Modules,
-    IReadOnlyList<ModuleDescriptor> ComingSoon);
+    IReadOnlyList<ModuleDescriptor> ComingSoon,
+    bool IsAdmin = false,
+    bool AdminActive = false);
 
 /// <summary>
 /// Sol menü (seçili ortama göre):
@@ -45,6 +47,7 @@ public sealed class SidebarViewComponent : ViewComponent
             {
                 var isActive = string.Equals(m.Controller, controller, StringComparison.OrdinalIgnoreCase);
                 var items = m.Items
+                    .Where(i => _accessService.HasPageAccess(UserClaimsPrincipal, _environment.Key, ModuleRegistry.PageKey(m, i)))
                     .Select(i => new SidebarItem(i, isActive && i.IsActiveFor(action)))
                     .ToList();
                 return new SidebarModule(m, isActive, items);
@@ -54,6 +57,9 @@ public sealed class SidebarViewComponent : ViewComponent
         var comingSoon = _registry.All.Where(m => !m.IsAvailable).ToList();
         var homeActive = string.Equals(controller, "Home", StringComparison.OrdinalIgnoreCase);
 
-        return View(new SidebarModel(homeActive, modules, comingSoon));
+        var isAdmin = _accessService.IsAdmin(UserClaimsPrincipal);
+        var adminActive = string.Equals(controller, "Access", StringComparison.OrdinalIgnoreCase);
+
+        return View(new SidebarModel(homeActive, modules, comingSoon, isAdmin, adminActive));
     }
 }

@@ -10,13 +10,15 @@ public static class AuthorizationServiceCollectionExtensions
     /// <summary>
     /// Ortam + modül bazlı yetkilendirmeyi kaydeder:
     ///  - Her modül için aynı adlı policy (Reports, Users, Groups), seçili ortama göre değerlendirilir
+    ///  - Sayfa filtresi (menüdeki her sayfa için ayrı yetki), "Admin" policy'si (kullanıcı yönetimi)
     ///  - "AnyModule" policy'si (karşılama ekranı)
     ///  - Fallback: [Authorize] yazılmayan her yer için kimliği doğrulanmış kullanıcı şartı
     ///  - Seçili ortam (ICurrentEnvironment, cookie)
     /// </summary>
     public static IServiceCollection AddModuleAuthorization(this IServiceCollection services, IConfiguration configuration)
     {
-        services.Configure<ModuleAuthorizationOptions>(configuration.GetSection(ModuleAuthorizationOptions.SectionName));
+        services.Configure<AccessControlOptions>(configuration.GetSection(AccessControlOptions.SectionName));
+        services.AddSingleton<BoAdmin.Web.Infrastructure.AppUsers.AppUserStore>();
 
         services.AddMemoryCache(); // kullanıcı bilgisi (AD görünen ad) önbelleği
         services.AddSingleton<EnvironmentCatalog>();
@@ -32,7 +34,11 @@ public static class AuthorizationServiceCollectionExtensions
         services.AddScoped<ICurrentEnvironment>(sp => sp.GetRequiredService<CurrentEnvironmentAccessor>());
 
         // Giriş ekranından geçmemiş kullanıcıyı giriş ekranına yönlendir
-        services.Configure<MvcOptions>(o => o.Filters.Add<EntryGateFilter>());
+        services.Configure<MvcOptions>(o =>
+        {
+            o.Filters.Add<EntryGateFilter>();
+            o.Filters.Add<PageAccessFilter>(); // sayfa bazlı yetki
+        });
 
         // Handler seçili ortamı kullandığı için scoped
         services.AddScoped<IAuthorizationHandler, ModuleAuthorizationHandler>();
@@ -45,6 +51,10 @@ public static class AuthorizationServiceCollectionExtensions
                     .RequireAuthenticatedUser()
                     .AddRequirements(new ModuleRequirement(module)));
             }
+
+            options.AddPolicy(ModuleNames.Admin, policy => policy
+                .RequireAuthenticatedUser()
+                .AddRequirements(new ModuleRequirement(ModuleNames.Admin)));
 
             options.AddPolicy(ModuleNames.AnyModule, policy => policy
                 .RequireAuthenticatedUser()

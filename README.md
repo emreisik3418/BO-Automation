@@ -85,6 +85,13 @@ prod'da `D:\Logs\BoAdmin\audit`. IIS app pool kimliğine bu klasörde **Modify**
   yazılır ve yeniden okunarak doğrulanır. "Ekle"de sonuç işlem anındaki güncel keyword'lerden hesaplanır.
 - **İşlem Geçmişi:** ortam bazlı filtre, CSV dışa aktarma
 
+## Uygulama kullanıcıları ve yetkiler
+
+- Yöneticiler `appsettings.json` > `AccessControl:Admins` (sicil veya AD grubu): tüm ortamlar, tüm sayfalar, **Yönetim > Uygulama Kullanıcıları** ekranı.
+- Diğer kullanıcılar o ekrandan eklenir/düzenlenir/silinir. Her kullanıcı için ortam × sayfa tablosu işaretlenir; hiç sayfası olmayan ortam kullanıcıya görünmez.
+- Yetkiler `AccessControl:UsersFile` dosyasında (JSON) tutulur; her kayıtta önceki hâli `.bak` olarak saklanır. Güncelleme kopyalarken bu dosyayı ezmeyin.
+- Her değişiklik İşlem Geçmişi'ne yazılır. Ortam ayarlarındaki eski `Authorization` bölümleri artık kullanılmaz.
+
 ## Sbox ile şifre alma
 
 BO servis kullanıcısı ve şifresi ortam bazında şirket şifre kasası Sbox'tan (HsmService) alınabilir.

@@ -28,6 +28,9 @@ public sealed class HomeViewModel
 
     public bool HasReports { get; init; }
 
+    /// <summary>Seçili ortamda erişilebilen sayfalar ("Reports.Index" gibi); hızlı erişim kartları buna göre gösterilir.</summary>
+    public Func<string, bool> CanSee { get; init; } = _ => true;
+
     public string FirstName =>
         DisplayName.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? DisplayName;
 

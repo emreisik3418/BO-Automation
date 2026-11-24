@@ -1,0 +1,130 @@
+@using BoAdmin.Web.Infrastructure
+@using BoAdmin.Web.Modules
+@model AccessEditViewModel
+@{
+    ViewData["Title"] = Model.IsNew ? "Kullanıcı Ekle" : $"Kullanıcı: {Model.Sicil}";
+    ViewData["Subtitle"] = "Hangi ortamda hangi sayfaları görebileceğini işaretleyin. Bir ortamda hiçbir sayfa seçilmezse o ortam kullanıcıya görünmez.";
+}
+
+@if (Model.ErrorMessage is not null)
+{
+    <div class="alert alert-danger">@Model.ErrorMessage</div>
+}
+
+<form method="post" asp-action="Save">
+    <input type="hidden" asp-for="IsNew" />
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label asp-for="Sicil" class="form-label">Sicil</label>
+                    @if (Model.IsNew)
+                    {
+                        <input asp-for="Sicil" class="form-control mono" placeholder="A12345" required autocomplete="off" />
+                    }
+                    else
+                    {
+                        <input asp-for="Sicil" class="form-control mono" readonly />
+                    }
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="DisplayName" class="form-label">Ad soyad</label>
+                    <input asp-for="DisplayName" class="form-control" placeholder="Boş bırakılırsa AD'den alınır" />
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="Note" class="form-label">Not</label>
+                    <input asp-for="Note" class="form-control" placeholder="Birim, talep no..." />
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <div class="form-check form-switch mb-2">
+                        <input asp-for="IsActive" class="form-check-input" type="checkbox" role="switch" />
+                        <label asp-for="IsActive" class="form-check-label">Aktif</label>
+                    </div>
+                </div>
+            </div>
+            @if (Model.CreatedInfo is not null)
+            {
+                <div class="small text-muted mt-2">
+                    Ekleyen: @Model.CreatedInfo
+                    @if (Model.UpdatedInfo is not null)
+                    {
+                        <text> · Son güncelleyen: @Model.UpdatedInfo</text>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="toolbar">
+            <span class="toolbar-title">Yetkiler</span>
+            <span class="toolbar-meta">satır başlığı = tüm ortamlar, sütun başlığı = ortamdaki tüm sayfalar</span>
+        </div>
+        <div class="table-wrap">
+            <table class="table table-modern align-middle mb-0 grant-table">
+                <thead>
+                    <tr>
+                        <th>Sayfa</th>
+                        @foreach (var env in Model.Environments)
+                        {
+                            <th class="text-center">
+                                <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none" data-toggle-col="@env.Key" title="Bu ortamdaki tüm sayfalar">
+                                    <span class="badge text-bg-@env.Color">@env.DisplayName</span>
+                                </button>
+                            </th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var module in Model.Modules)
+                    {
+                        <tr class="grant-module">
+                            <td colspan="@(Model.Environments.Count + 1)">@Icons.Get(module.Icon, 16) @module.Title</td>
+                        </tr>
+                        foreach (var item in module.Items)
+                        {
+                            var key = ModuleRegistry.PageKey(module, item);
+                            <tr>
+                                <td>
+                                    <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none text-body" data-toggle-row="@key" title="Tüm ortamlarda">
+                                        @Icons.Get(item.Icon, 15) @item.Title
+                                    </button>
+                                </td>
+                                @foreach (var env in Model.Environments)
+                                {
+                                    <td class="text-center">
+                                        <input class="form-check-input" type="checkbox" name="Grants"
+                                               value="@AccessEditViewModel.GrantKey(env.Key, key)"
+                                               data-env="@env.Key" data-page="@key"
+                                               checked="@Model.IsGranted(env.Key, key)" />
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Kaydet</button>
+        <a asp-action="Index" class="btn btn-outline-secondary">Vazgeç</a>
+    </div>
+</form>
+
+@section Scripts {
+    <script>
+        (function () {
+            function toggle(boxes) {
+                const allOn = boxes.every(b => b.checked);
+                boxes.forEach(b => b.checked = !allOn);
+            }
+            document.querySelectorAll('[data-toggle-col]').forEach(btn => btn.addEventListener('click', () =>
+                toggle([...document.querySelectorAll('input[data-env="' + btn.dataset.toggleCol + '"]')])));
+            document.querySelectorAll('[data-toggle-row]').forEach(btn => btn.addEventListener('click', () =>
+                toggle([...document.querySelectorAll('input[data-page="' + btn.dataset.toggleRow + '"]')])));
+        })();
+    </script>
+}
