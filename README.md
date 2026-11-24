@@ -85,6 +85,16 @@ prod'da `D:\Logs\BoAdmin\audit`. IIS app pool kimliğine bu klasörde **Modify**
   yazılır ve yeniden okunarak doğrulanır. "Ekle"de sonuç işlem anındaki güncel keyword'lerden hesaplanır.
 - **İşlem Geçmişi:** ortam bazlı filtre, CSV dışa aktarma
 
+## Sbox ile şifre alma
+
+BO servis kullanıcısı ve şifresi ortam bazında şirket şifre kasası Sbox'tan (HsmService) alınabilir.
+
+1. Proxy'yi üretin (geliştirme makinesinde bir kez): `tools\generate-sbox-proxy.bat "http://SBOX-SUNUCU/HsmService.svc?wsdl"`.
+   Çıktı `src\BoAdmin.Infrastructure\Sbox\HsmServiceProxy.cs` (gitignore'da). Dosya yokken proje derlenir ama Sbox kullanılamaz.
+2. `appsettings.json` > `SapBo:Sbox`: `Endpoint`, `UserName`. Şifre: User Secrets `SapBo:Sbox:Password` / sunucuda `.\sifre-ayarla.ps1 -Ortam SBOX`.
+3. Sbox'tan alınacak ortama `"Sbox": { "AppName", "SubAppName", "Ip", "SensitiveDataName" }` ekleyin. Kayıttaki değer `kullanici;sifre` biçiminde olmalı.
+4. Bilgi `CacheMinutes` boyunca bellekte tutulur; BO "şifre hatalı" derse Sbox'tan yeniden alınıp bir kez daha denenir.
+
 ## Sunucuda exe olarak çalıştırma (IIS gerekmez)
 
 1. VS: Build > Publish > **Sunucu** profili > Publish. Çıktı: `src\BoAdmin.Web\bin\publish\` (self-contained, sunucuya .NET kurmak gerekmez).

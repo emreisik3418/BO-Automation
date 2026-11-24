@@ -25,3 +25,6 @@ logs/
 ## Yerel yapılandırma (şifre vb. asla commit edilmesin)
 appsettings.*.local.json
 secrets.json
+
+# Sbox WCF proxy'si WSDL'den üretilir (tools/generate-sbox-proxy.bat), repoya konmaz
+src/BoAdmin.Infrastructure/Sbox/

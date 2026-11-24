@@ -7,7 +7,6 @@ using BoAdmin.Application.Principals;
 using BoAdmin.Infrastructure.Bo.Models;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace BoAdmin.Infrastructure.Bo;
 
@@ -38,17 +37,19 @@ public sealed class BoPrincipalGateway : IBoPrincipalGateway
     private const int QueryPageSize = 500;
 
     private readonly BoRestClient _client;
-    private readonly IOptionsMonitor<BoOptions> _options;
+    private readonly BoAdmin.Infrastructure.Bo.Credentials.IBoCredentialProvider _credentials;
     private readonly ILogger<BoPrincipalGateway> _logger;
 
-    public BoPrincipalGateway(BoRestClient client, IOptionsMonitor<BoOptions> options, ILogger<BoPrincipalGateway> logger)
+    public BoPrincipalGateway(BoRestClient client, BoAdmin.Infrastructure.Bo.Credentials.IBoCredentialProvider credentials,
+        ILogger<BoPrincipalGateway> logger)
     {
         _client = client;
-        _options = options;
+        _credentials = credentials;
         _logger = logger;
     }
 
-    public string? ServiceAccountName => _options.CurrentValue.Find(_client.EnvironmentKey)?.UserName;
+    /// <summary>Uygulamanın BO'ya bağlandığı hesap (Sbox kullanılıyorsa Sbox'tan gelen ad).</summary>
+    public string? ServiceAccountName => _credentials.KnownUserName(_client.EnvironmentKey);
 
     // ------------------------------------------------------------------
     // Kullanıcılar

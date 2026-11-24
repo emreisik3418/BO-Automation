@@ -4,6 +4,7 @@
   Kullanım (yönetici PowerShell):
       .\sifre-ayarla.ps1 -Ortam TEST
       .\sifre-ayarla.ps1 -Ortam PROD
+      .\sifre-ayarla.ps1 -Ortam SBOX     # Sbox servis kullanıcısının şifresi (SapBo__Sbox__Password)
   Şifre ekranda görünmez ve hiçbir dosyaya yazılmaz. Servis kuruluysa otomatik yeniden başlatılır.
   Önce servis-kur.ps1, sonra bu betik çalıştırılmalı.
 #>
@@ -14,11 +15,12 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$secure = Read-Host "$Ortam ortamı BO şifresi" -AsSecureString
+$secure = Read-Host "$Ortam şifresi" -AsSecureString
 $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
 try {
     $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
-    $name = "SapBo__Environments__$($Ortam.ToUpperInvariant())__Password"
+    $name = if ($Ortam.ToUpperInvariant() -eq "SBOX") { "SapBo__Sbox__Password" }
+            else { "SapBo__Environments__$($Ortam.ToUpperInvariant())__Password" }
     # 1) Makine ortam değişkeni: exe'yi konsoldan/çift tıkla çalıştırınca okunur
     [Environment]::SetEnvironmentVariable($name, $plain, "Machine")
     Write-Host "Kaydedildi: $name (makine ortam değişkeni)"

@@ -1,3 +1,4 @@
+using BoAdmin.Infrastructure.Bo.Credentials;
 using System.Collections.Concurrent;
 using System.Net.Http.Json;
 using BoAdmin.Application.Common.Exceptions;
@@ -31,6 +32,7 @@ public sealed class BoSessionService : IBoSessionService, IDisposable
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IOptionsMonitor<BoOptions> _options;
+    private readonly IBoCredentialProvider _credentials;
     private readonly ILogger<BoSessionService> _logger;
 
     private sealed class SessionSlot
@@ -46,10 +48,12 @@ public sealed class BoSessionService : IBoSessionService, IDisposable
     public BoSessionService(
         IHttpClientFactory httpClientFactory,
         IOptionsMonitor<BoOptions> options,
+        IBoCredentialProvider credentials,
         ILogger<BoSessionService> logger)
     {
         _httpClientFactory = httpClientFactory;
         _options = options;
+        _credentials = credentials;
         _logger = logger;
     }
 
@@ -121,18 +125,31 @@ public sealed class BoSessionService : IBoSessionService, IDisposable
 
     private async Task<string> LogonAsync(string environment, CancellationToken ct)
     {
+        var credential = await _credentials.GetAsync(environment, ct);
+        try
+        {
+            return await LogonWithAsync(environment, credential, ct);
+        }
+        catch (BoAuthenticationException) when (credential.FromSbox)
+        {
+            // Sbox'taki şifre değişmiş olabilir: bellekteki bilgiyi atıp Sbox'tan yeniden alır, BİR KEZ daha dener.
+            _credentials.Invalidate(environment);
+            var fresh = await _credentials.GetAsync(environment, ct);
+            _logger.LogWarning("BO logon Sbox bilgisiyle başarısız oldu; Sbox'tan yeniden alınan bilgiyle tekrar deneniyor. Ortam: {Environment}", environment);
+            return await LogonWithAsync(environment, fresh, ct);
+        }
+    }
+
+    private async Task<string> LogonWithAsync(string environment, BoCredential credential, CancellationToken ct)
+    {
         var env = GetEnvironment(environment);
 
-        if (string.IsNullOrWhiteSpace(env.BaseUrl) || string.IsNullOrWhiteSpace(env.UserName))
-            throw new BoAuthenticationException($"'{environment}' ortamı için BaseUrl veya UserName tanımlı değil.");
-
-        if (string.IsNullOrWhiteSpace(env.Password))
-            throw new BoAuthenticationException(
-                $"'{environment}' ortamı için şifre tanımlı değil (SapBo:Environments:{environment}:Password).");
+        if (string.IsNullOrWhiteSpace(env.BaseUrl))
+            throw new BoAuthenticationException($"'{environment}' ortamı için BaseUrl tanımlı değil.");
 
         var client = _httpClientFactory.CreateClient(HttpClientName);
         var url = BoUrl.Combine(env.BaseUrl, "logon/long");
-        var request = new BoLogonRequest(env.UserName, env.Password, env.AuthType);
+        var request = new BoLogonRequest(credential.UserName, credential.Password, env.AuthType);
 
         HttpResponseMessage response;
         try

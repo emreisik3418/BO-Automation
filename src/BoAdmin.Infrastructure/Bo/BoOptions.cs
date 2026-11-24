@@ -29,6 +29,9 @@ public sealed class BoOptions
 
     public Dictionary<string, BoEnvironmentOptions> Environments { get; set; } = new();
 
+    /// <summary>Şirket içi şifre kasası (HsmService). Ortamında "Sbox" bölümü olan ortamlar BO kullanıcı/şifresini buradan alır.</summary>
+    public SboxOptions Sbox { get; set; } = new();
+
     /// <summary>Ortamı büyük/küçük harf duyarsız bulur.</summary>
     public BoEnvironmentOptions? Find(string? key)
     {
@@ -71,6 +74,14 @@ public sealed class BoEnvironmentOptions
 
     public string Password { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Doluysa BO kullanıcı adı ve şifresi Sbox'tan alınır; UserName / Password kullanılmaz.
+    /// Boşsa UserName + Password (User Secrets / ortam değişkeni) kullanılır.
+    /// </summary>
+    public SboxTargetOptions? Sbox { get; set; }
+
+    public bool UsesSbox => Sbox?.IsConfigured == true;
+
     /// <summary>secEnterprise / secWinAD / secLDAP</summary>
     public string AuthType { get; set; } = "secEnterprise";
 
@@ -110,4 +121,35 @@ public enum BoMoveStrategy
 
     /// <summary>Raylight ile (yalnızca Webi)</summary>
     Raylight
+}
+
+/// <summary>Sbox servisi bağlantısı (tüm ortamlar için ortak).</summary>
+public sealed class SboxOptions
+{
+    /// <summary>Örn. http://sbox-sunucu/HsmService.svc</summary>
+    public string Endpoint { get; set; } = string.Empty;
+
+    /// <summary>Sbox servisini çağıran uygulama kullanıcısı.</summary>
+    public string UserName { get; set; } = string.Empty;
+
+    /// <summary>Düz metin tutulmaz: User Secrets (geliştirme) / ortam değişkeni SapBo__Sbox__Password (sunucu).</summary>
+    public string Password { get; set; } = string.Empty;
+
+    public int TimeoutSeconds { get; set; } = 30;
+
+    /// <summary>Sbox'tan alınan bilgi bellekte bu kadar dakika tutulur. BO logon "şifre hatalı" derse süre beklenmeden yeniden alınır.</summary>
+    public int CacheMinutes { get; set; } = 60;
+}
+
+/// <summary>Bir ortamın Sbox'taki kaydının yeri (değer biçimi "kullanici;sifre").</summary>
+public sealed class SboxTargetOptions
+{
+    public string AppName { get; set; } = string.Empty;
+    public string SubAppName { get; set; } = string.Empty;
+    public string Ip { get; set; } = string.Empty;
+    public string SensitiveDataName { get; set; } = string.Empty;
+
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(SensitiveDataName);
+
+    public override string ToString() => $"{AppName}/{SubAppName}/{SensitiveDataName}";
 }

@@ -7,11 +7,22 @@
     <RootNamespace>BoAdmin.Infrastructure</RootNamespace>
   </PropertyGroup>
 
+  <!--
+    Sbox (HsmService) WCF proxy'si WSDL'den üretilir ve repoya konmaz (tools\generate-sbox-proxy.bat).
+    Dosya varsa SBOX_PROXY sembolü tanımlanır ve gerçek Sbox istemcisi derlenir.
+  -->
+  <PropertyGroup Condition="Exists('Sbox\HsmServiceProxy.cs')">
+    <DefineConstants>$(DefineConstants);SBOX_PROXY</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="8.0.1" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.1" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="8.0.0" />
+    <!-- Sbox WCF istemcisi -->
+    <PackageReference Include="System.ServiceModel.Http" Version="8.0.0" />
+    <PackageReference Include="System.ServiceModel.Primitives" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,3 +1,4 @@
+using BoAdmin.Infrastructure.Bo.Credentials;
 using System.Net.Http.Headers;
 using BoAdmin.Application.Abstractions;
 using BoAdmin.Application.Audit;
@@ -27,6 +28,8 @@ public static class DependencyInjection
                 "Her ortamın BaseUrl değeri geçerli bir adres olmalı (örn. http://bo-server:6405/biprws).")
             .Validate(o => o.Environments.Values.All(e => e.AuthType is "secEnterprise" or "secWinAD" or "secLDAP"),
                 "AuthType secEnterprise, secWinAD veya secLDAP olmalı.")
+            .Validate(o => !o.Environments.Values.Any(e => e.UsesSbox) || Uri.TryCreate(o.Sbox.Endpoint, UriKind.Absolute, out _),
+                "Sbox kullanan ortam var ama SapBo:Sbox:Endpoint geçerli bir adres değil.")
             // Şifre başlangıçta zorunlu tutulmaz: geliştirmede yalnızca TEST şifresi girilmiş olabilir.
             // Şifresi olmayan ortama geçilince ekranda açık hata mesajı gösterilir.
             .ValidateOnStart();
@@ -34,6 +37,8 @@ public static class DependencyInjection
         services.AddMemoryCache();
 
         // ---------------- Oturum + HTTP ----------------
+        services.AddSingleton<ISboxClient, SboxClient>();
+        services.AddSingleton<IBoCredentialProvider, BoCredentialProvider>();
         services.AddSingleton<IBoSessionService, BoSessionService>();
         services.AddTransient<BoLogonTokenHandler>();
 
